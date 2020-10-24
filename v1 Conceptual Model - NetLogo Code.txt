@@ -1,10 +1,10 @@
-﻿V1 Conceptual Model NETLOGO CODE
-Physical Layout Module:
-Agent Module:
-Network Module:
-Activity Module:
-Contagion Module:
-Interventions Module:
+;V1 Conceptual Model NETLOGO CODE
+;Physical Layout Module:
+;Agent Module:
+;Network Module:
+;Activity Module:
+;Contagion Module:
+;Interventions Module:
 
 
 ________________
