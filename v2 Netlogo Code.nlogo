@@ -641,7 +641,10 @@ end
 ; ticks are 1 hour intervals
 to activity
   ask refugees with [activitycategory = "youth2parents"] [
-    if hour = 6 []
+    if hour = 6 [
+      set activitylocation 
+      move-to activitylocation
+    ]
     if hour = 22 [move-to houselocation]
   ]
 end
