@@ -1,5 +1,5 @@
 ;V2 NETLOGO CODE
-;adding new comment
+
 ; Model Setup
 extensions [ gis ]
 
@@ -8,6 +8,7 @@ breed [ sewage-tanks sewage-tank ]
 breed [ water-pumps water-pump ]
 breed [ wash-n-sinks wash-n-sink ]
 breed [ tent-centroids tent-centroid ]
+breed [ sec-centroids sec-centroid ]
 undirected-link-breed [ Friends Friend ]
 
 tent-centroids-own [
@@ -15,6 +16,10 @@ tent-centroids-own [
   hhnumber
   hhparents
   hhkids_elderly
+]
+
+sec-centroids-own [
+  nationality
 ]
 
 refugees-own [
@@ -81,6 +86,8 @@ globals [
   water-pumps2-dataset
   zones-labels-dataset
   zones-on-31219-dataset
+  playareas
+  foodcenter
   male_percent
   age_10
   age_20
@@ -98,6 +105,7 @@ globals [
   syria
   value_std_dev
   max-friends
+  numberofunaccompaniedyouth
   hour
   day
 ]
@@ -126,8 +134,7 @@ to setup
   set syria 1 ; 729/10135 = 7%
   set value_std_dev 10
   set max-friends 3
-  set hour floor (ticks mod 24) ;the ticks are 10 minutes, so this translates it into hours
-  set day floor (ticks / 24) + 1 ;the ticks are 10 minutes, so this translates it into days
+  set numberofunaccompaniedyouth 500
 
 
   ;gis:load-coordinate-system (word "WGS_84_Geographic.prj")
@@ -135,12 +142,17 @@ to setup
   display-all
   createpeople
   createfriendlinks
+  set playareas patches with [pxcor < 300 and pxcor > -300 and pycor < 300 and pycor > -300 and pcolor = black]
+  set foodcenter patch -28 -99
 end
 
 
 ; Model Go
 to go
+  set hour floor (ticks mod 24) ;the ticks are 10 minutes, so this translates it into hours
+  set day floor (ticks / 24) + 1 ;the ticks are 10 minutes, so this translates it into days
   activity
+  tick
 end
 
 
@@ -291,6 +303,21 @@ to display-buildings
     ; coordinate transformation
     if not empty? cent
     [ create-tent-centroids 1
+      [ set xcor item 0 cent
+        set ycor item 1 cent
+        set size 0.2
+        set color pcolor
+      ]
+    ]
+  ]
+
+ foreach gis:feature-list-of sec-building-dataset [ vector-feature ->
+    let cent gis:location-of gis:centroid-of vector-feature
+    ; centroid will be an empty list if it lies outside the bounds
+    ; of the current NetLogo world, as defined by our current GIS
+    ; coordinate transformation
+    if not empty? cent
+    [ create-sec-centroids 1
       [ set xcor item 0 cent
         set ycor item 1 cent
         set size 0.2
@@ -567,20 +594,13 @@ to createpeople
     setnationality
     sethhcharacteristics
     ask patch-here [
-      sprout-refugees [hhnumber] of myself [
-        set color white
-        set shape "person"
-        set nationality [nationality] of tent-centroids-here
-        set houselocation patch-here
-        setculture
-        setvalues
-      ]
+      sprout-refugees [hhnumber] of myself [ sproutsettings ]
     ]
     (ifelse
       hhnumber = 1 [ ask refugees-here [
-        setage
+        let x random-float 1
+        ifelse x < 0.96 [set age "adult"] [set age "elderly"] ;unaccompanied youth have their own area, so are not in tents
         setsex
-        if age = "youth" [set activitycategory "unaccompaniedyouth"]
         if age = "adult" and sex = "male" [set activitycategory "adult man"]
         if age = "adult" and sex = "female" [set activitycategory "adult woman no husband"]
         if age = "eldery" [set activitycategory "unaccompaniedelderly"]
@@ -593,12 +613,12 @@ to createpeople
            ]
           ]
           hhparents = "mother only" [
-            ask one-of refugees-here [ set age "adult" set sex "female"
+            ask one-of refugees-here [ set age "adult" set sex "female" set activitycategory "adult woman no husband"
               ask other refugees-here [ setkidselderly if age = "youth" [set activitycategory "youth1parent"] if age = "elderly" [set activitycategory "elderlywithfamily"]]
             ]
           ]
-          [ask one-of refugees-here [ set age "adult" set sex "male"
-            ask one-of other refugees-here [ set age "adult" set sex "female"]]
+          [ask one-of refugees-here [ set age "adult" set sex "male" set activitycategory "adult man"
+            ask one-of other refugees-here [ set age "adult" set sex "female" set activitycategory "adult woman with husband"]]
            let remaining refugees-here with [age != "adult"]
            if any? remaining [ ask remaining [ setkidselderly if age = "youth" [set activitycategory "youth2parents"] if age = "elderly" [set activitycategory "elderlywithfamily"]]]
           ]
@@ -606,10 +626,26 @@ to createpeople
       ]
     )
   ]
+
+  ask sec-centroids [ ; where unaccompanied youth stay
+    setnationality
+    ask patch-here [
+      sprout-refugees numberofunaccompaniedyouth / count sec-centroids [ sproutsettings ]
+      ask refugees-here [set age "youth" setsex set activitycategory "unaccompaniedyouth"]
+    ]
+  ]
 end
 
+to sproutsettings
+  set color white
+  set shape "person"
+  set nationality [nationality] of tent-centroids-here
+  set houselocation patch-here
+  setculture
+  setvalues
+end
 
-;Network Module:
+;Network Module: save network
 to-report value-euclidean-distance [other-agent]
   report sqrt sum (list
     ((ig2-hed - [ig2-hed] of other-agent) ^ 2)
@@ -639,27 +675,54 @@ end
 ; Activity Module:
 
 ; ticks are 1 hour intervals
+
 to activity
-  ask refugees with [activitycategory = "youth2parents"] [
-    if hour = 6 [
-      set activitylocation 
-      move-to activitylocation
+  if hour = 6 [
+    ask refugees with [activitycategory = "unaccompaniedyouth" or activitycategory = "adult man" or activitycategory = "adult woman no husband" or activitycategory = "unaccompaniedelderly"] [
+      waitforfood
     ]
-    if hour = 22 [move-to houselocation]
+  ]
+
+  if hour = 10 [
+    ask refugees with [activitycategory = "youth2parents" or activitycategory = "elderlywithfamily"] [
+      let dice random-float 1
+      ifelse dice < 0.5 [meetwithfriends][gototoilet]
+    ]
   ]
 end
+
+to meetwithfriends
+  if member? activitylocation playareas = false [set activitylocation one-of playareas]
+  ask Friend-neighbors [set activitylocation [activitylocation] of myself]
+  move-to activitylocation
+end
+
+to gototoilet
+  set activitylocation patch-set [patch-here] of min-one-of wash-n-sinks [distance myself] ;closest toilet
+  move-to activitylocation
+end
+
+to waitforfood
+  set activitylocation foodcenter
+  move-to activitylocation
+end
+
+to gohome
+  move-to houselocation
+end
+
+
 ; Contagion Module:
 
 
 
 ; Interventions Module:
-
 @#$#@#$#@
 GRAPHICS-WINDOW
 47
 10
-655
-619
+1048
+1020
 -1
 -1
 0.6
@@ -683,10 +746,10 @@ ticks
 30.0
 
 BUTTON
-851
-48
-914
-81
+1112
+28
+1175
+61
 NIL
 setup\n
 NIL
@@ -698,6 +761,34 @@ NIL
 NIL
 NIL
 1
+
+BUTTON
+1114
+79
+1178
+113
+NIL
+go
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+MONITOR
+1215
+24
+1279
+69
+NIL
+hour
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
