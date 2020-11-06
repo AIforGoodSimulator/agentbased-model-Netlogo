@@ -142,7 +142,7 @@ to setup
   display-all
   createpeople
   createfriendlinks
-  set playareas patches with [pxcor < 300 and pxcor > -300 and pycor < 300 and pycor > -300 and pcolor = black]
+  ask patch 40 -60 [set playareas patches with [pcolor = black] in-radius 250 ]
   set foodcenter patch -28 -99
 end
 
@@ -343,7 +343,17 @@ to display-buildings
   ]
 end
 
+to export
+  let x user-input "Enter filename: "
+  export-world x
+end
 
+to import
+  clear-all
+  reset-ticks
+  let x user-input "Enter filename: "
+  import-world x
+end
 
 ;Agent Module:
 
@@ -601,26 +611,26 @@ to createpeople
         let x random-float 1
         ifelse x < 0.96 [set age "adult"] [set age "elderly"] ;unaccompanied youth have their own area, so are not in tents
         setsex
-        if age = "adult" and sex = "male" [set activitycategory "adult man"]
-        if age = "adult" and sex = "female" [set activitycategory "adult woman no husband"]
-        if age = "eldery" [set activitycategory "unaccompaniedelderly"]
+        if age = "adult" and sex = "male" [set activitycategory "Activity B"]
+        if age = "adult" and sex = "female" [set activitycategory "Activity B"]
+        if age = "eldery" [set activitycategory "Activity B"]
       ]]
       hhnumber > 1 [
         (ifelse
           hhparents = "father only" [
-            ask one-of refugees-here [ set age "adult" set sex "male" set activitycategory "adult man"
-              ask other refugees-here [ setkidselderly if age = "youth" [set activitycategory "youth1parent"] if age = "elderly" [set activitycategory "elderlywithfamily"]]
+            ask one-of refugees-here [ set age "adult" set sex "male" set activitycategory "Activity B"
+              ask other refugees-here [ setkidselderly if age = "youth" [set activitycategory "Activity A"] if age = "elderly" [set activitycategory "Activity A"]]
            ]
           ]
           hhparents = "mother only" [
-            ask one-of refugees-here [ set age "adult" set sex "female" set activitycategory "adult woman no husband"
-              ask other refugees-here [ setkidselderly if age = "youth" [set activitycategory "youth1parent"] if age = "elderly" [set activitycategory "elderlywithfamily"]]
+            ask one-of refugees-here [ set age "adult" set sex "female" set activitycategory "Activity B"
+              ask other refugees-here [ setkidselderly if age = "youth" [set activitycategory "Activity A"] if age = "elderly" [set activitycategory "Activity A"]]
             ]
           ]
-          [ask one-of refugees-here [ set age "adult" set sex "male" set activitycategory "adult man"
-            ask one-of other refugees-here [ set age "adult" set sex "female" set activitycategory "adult woman with husband"]]
+          [ask one-of refugees-here [ set age "adult" set sex "male" set activitycategory "Activity B"
+            ask one-of other refugees-here [ set age "adult" set sex "female" set activitycategory "Activity A"]]
            let remaining refugees-here with [age != "adult"]
-           if any? remaining [ ask remaining [ setkidselderly if age = "youth" [set activitycategory "youth2parents"] if age = "elderly" [set activitycategory "elderlywithfamily"]]]
+           if any? remaining [ ask remaining [ setkidselderly if age = "youth" [set activitycategory "Activity A"] if age = "elderly" [set activitycategory "Activity A"]]]
           ]
         )
       ]
@@ -631,7 +641,7 @@ to createpeople
     setnationality
     ask patch-here [
       sprout-refugees numberofunaccompaniedyouth / count sec-centroids [ sproutsettings ]
-      ask refugees-here [set age "youth" setsex set activitycategory "unaccompaniedyouth"]
+      ask refugees-here [set age "youth" setsex set activitycategory "Activity A"]
     ]
   ]
 end
@@ -677,17 +687,57 @@ end
 ; ticks are 1 hour intervals
 
 to activity
-  if hour = 6 [
-    ask refugees with [activitycategory = "unaccompaniedyouth" or activitycategory = "adult man" or activitycategory = "adult woman no husband" or activitycategory = "unaccompaniedelderly"] [
-      waitforfood
+  ask refugees with [activitycategory = "Activity A"] [
+    if hour < 6 [gohome]
+    if hour >= 6 and hour < 9 [
+      let x random-float 1
+      if x < 0.33 [gototoilet]
+      if x > 0.66 [meetwithfriends]
     ]
+    if hour = 9 [gohome]
+    if hour >= 10 and hour < 13 [
+      let x random-float 1
+      if x < 0.33 [gototoilet]
+      if x > 0.66 [meetwithfriends]
+    ]
+    if hour = 13 [gohome]
+    if hour >= 14 and hour < 20 [
+      let x random-float 1
+      if x < 0.33 [gototoilet]
+      if x > 0.66 [meetwithfriends]
+    ]
+    if hour = 20 [gohome]
+    if hour >= 21 and hour < 23 [
+      let x random-float 1
+      if x < 0.33 [gototoilet]
+      if x > 0.66 [meetwithfriends]
+    ]
+    if hour = 23 [gohome]
   ]
 
-  if hour = 10 [
-    ask refugees with [activitycategory = "youth2parents" or activitycategory = "elderlywithfamily"] [
-      let dice random-float 1
-      ifelse dice < 0.5 [meetwithfriends][gototoilet]
+  ask refugees with [activitycategory = "Activity B"] [
+    if hour >= 4 and hour < 6 [
+      let x random-float 1
+      if x < 0.5 [gototoilet]
+      if x > 0.5 [gohome]
     ]
+    if hour >= 6 and hour < 9 [waitforfood]
+    if hour = 9 [gohome]
+    if hour >= 10 and hour < 13 [waitforfood]
+    if hour = 13 [gohome]
+    if hour >= 14 and hour < 17 [
+      let x random-float 1
+      if x < 0.33 [gototoilet]
+      if x > 0.66 [meetwithfriends]
+    ]
+    if hour >= 17 and hour < 20 [waitforfood]
+    if hour = 20 [gohome]
+    if hour >= 21 and hour < 23 [
+      let x random-float 1
+      if x < 0.33 [gototoilet]
+      if x > 0.66 [meetwithfriends]
+    ]
+    if hour = 23 [gohome]
   ]
 end
 
@@ -698,7 +748,7 @@ to meetwithfriends
 end
 
 to gototoilet
-  set activitylocation patch-set [patch-here] of min-one-of wash-n-sinks [distance myself] ;closest toilet
+  set activitylocation [patch-here] of min-one-of wash-n-sinks [distance myself] ;closest toilet
   move-to activitylocation
 end
 
@@ -708,7 +758,8 @@ to waitforfood
 end
 
 to gohome
-  move-to houselocation
+  set activitylocation houselocation
+  move-to activitylocation
 end
 
 
@@ -748,9 +799,9 @@ ticks
 BUTTON
 1112
 28
-1175
-61
-NIL
+1237
+63
+setup new world
 setup\n
 NIL
 1
@@ -763,10 +814,10 @@ NIL
 1
 
 BUTTON
-1114
-79
-1178
-113
+1115
+86
+1179
+120
 NIL
 go
 T
@@ -777,18 +828,52 @@ NIL
 NIL
 NIL
 NIL
-1
+0
 
 MONITOR
-1215
-24
-1279
-69
+1198
+86
+1262
+131
 NIL
 hour
 17
 1
 11
+
+BUTTON
+1263
+29
+1366
+64
+export world
+export
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+1390
+28
+1490
+63
+import world
+import
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
