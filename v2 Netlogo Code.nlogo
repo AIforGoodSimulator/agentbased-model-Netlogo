@@ -53,6 +53,29 @@ refugees-own [
   ig2-cft
   ig2-sec
   ig2-uni
+  tcid
+  tid
+  ti1
+  ti2
+  ti3
+  ti4
+  tp1
+  tp2
+  tp3
+  tp4
+  infected?
+  status
+  nyd
+  nzd
+  fm
+  pid
+  home?
+  exp-duration
+  pidt
+  hcid
+  pidh
+  pidm
+  pidf
 ]
 
 globals [
@@ -108,10 +131,11 @@ globals [
   numberofunaccompaniedyouth
   hour
   day
+
 ]
 
 patches-own [
- land-type
+  land-type
 ]
 
 to setup
@@ -152,6 +176,7 @@ to go
   set hour floor (ticks mod 24) ;the ticks are 10 minutes, so this translates it into hours
   set day floor (ticks / 24) + 1 ;the ticks are 10 minutes, so this translates it into days
   activity
+  disease
   tick
 end
 
@@ -221,7 +246,7 @@ to load-data
     (gis:envelope-of water-pumps2-dataset)
     ;(gis:envelope-of zones-labels-dataset)
     ;(gis:envelope-of zones-on-31219-dataset)
-    )
+  )
 end
 
 to display-all
@@ -311,7 +336,7 @@ to display-buildings
     ]
   ]
 
- foreach gis:feature-list-of sec-building-dataset [ vector-feature ->
+  foreach gis:feature-list-of sec-building-dataset [ vector-feature ->
     let cent gis:location-of gis:centroid-of vector-feature
     ; centroid will be an empty list if it lies outside the bounds
     ; of the current NetLogo world, as defined by our current GIS
@@ -326,7 +351,7 @@ to display-buildings
     ]
   ]
 
- foreach gis:feature-list-of wash-n-sinks-dataset [ vector-feature ->
+  foreach gis:feature-list-of wash-n-sinks-dataset [ vector-feature ->
     let cent gis:location-of gis:centroid-of vector-feature
     ; centroid will be an empty list if it lies outside the bounds
     ; of the current NetLogo world, as defined by our current GIS
@@ -503,7 +528,7 @@ to sethhcharacteristics ; used data from UN
         dice4 > 0.68 and dice4 <= 0.94 ["elderly only"] ; column 10 - 12 normalized to 100
         ["kids and elderly"])
     ]
-)
+  )
 end
 
 to setculture
@@ -564,7 +589,7 @@ to setculture
       set lto 30
       set ivr 0
     ]
-)
+  )
 end
 
 to setvalues
@@ -590,13 +615,13 @@ to setvalues
 end
 
 to setkidselderly
-(ifelse
-  [hhkids_elderly] of tent-centroids-here = "kids only" [ set age "youth" setsex ]
-  [hhkids_elderly] of tent-centroids-here = "elderly only" [ set age "elderly" setsex ]
-  [let x random-float 1
-   ifelse x > 0.5 [set age "youth"] [set age "elderly"]
-   setsex ]
-)
+  (ifelse
+    [hhkids_elderly] of tent-centroids-here = "kids only" [ set age "youth" setsex ]
+    [hhkids_elderly] of tent-centroids-here = "elderly only" [ set age "elderly" setsex ]
+    [let x random-float 1
+      ifelse x > 0.5 [set age "youth"] [set age "elderly"]
+      setsex ]
+  )
 end
 
 to createpeople
@@ -620,7 +645,7 @@ to createpeople
           hhparents = "father only" [
             ask one-of refugees-here [ set age "adult" set sex "male" set activitycategory "Activity B"
               ask other refugees-here [ setkidselderly if age = "youth" [set activitycategory "Activity A"] if age = "elderly" [set activitycategory "Activity A"]]
-           ]
+            ]
           ]
           hhparents = "mother only" [
             ask one-of refugees-here [ set age "adult" set sex "female" set activitycategory "Activity B"
@@ -629,8 +654,8 @@ to createpeople
           ]
           [ask one-of refugees-here [ set age "adult" set sex "male" set activitycategory "Activity B"
             ask one-of other refugees-here [ set age "adult" set sex "female" set activitycategory "Activity A"]]
-           let remaining refugees-here with [age != "adult"]
-           if any? remaining [ ask remaining [ setkidselderly if age = "youth" [set activitycategory "Activity A"] if age = "elderly" [set activitycategory "Activity A"]]]
+            let remaining refugees-here with [age != "adult"]
+            if any? remaining [ ask remaining [ setkidselderly if age = "youth" [set activitycategory "Activity A"] if age = "elderly" [set activitycategory "Activity A"]]]
           ]
         )
       ]
@@ -643,6 +668,11 @@ to createpeople
       sprout-refugees numberofunaccompaniedyouth / count sec-centroids [ sproutsettings ]
       ask refugees-here [set age "youth" setsex set activitycategory "Activity A"]
     ]
+  ]
+  ask refugees [
+    set infected? FALSE
+    set status "susceptible"
+    set home? TRUE
   ]
 end
 
@@ -670,7 +700,7 @@ to-report value-euclidean-distance [other-agent]
 end
 
 to-report possible-friends
-   report other refugees with [ houselocation != [houselocation] of myself and age = [age] of myself ]
+  report other refugees with [ houselocation != [houselocation] of myself and age = [age] of myself ]
 end
 
 to createfriendlinks
@@ -688,54 +718,139 @@ end
 
 to activity
   ask refugees with [activitycategory = "Activity A"] [
+    if hour = 1 [
+      set tcid 0
+      set tid 0
+      set nyd 0
+      set nzd 0
+      set fm 0
+    ]
     if hour < 6 [gohome]
-    if hour >= 6 and hour < 9 [
+    if hour = 6 [
       let x random-float 1
-      if x < 0.33 [gototoilet]
-      if x > 0.66 [meetwithfriends]
+      if x < 0.33 [
+        gototoilet
+        let px pxcor
+        let py pycor
+        set tcid tcid + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])
+        set tid tid + (count refugees with [pxcor = px and pycor = py])
+      ]
+      if x > 0.66 [
+        meetwithfriends
+        let px pxcor
+        let py pycor
+        set fm fm + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])
+      ]
     ]
     if hour = 9 [gohome]
-    if hour >= 10 and hour < 13 [
+    if hour = 10 [
       let x random-float 1
-      if x < 0.33 [gototoilet]
-      if x > 0.66 [meetwithfriends]
+      if x < 0.33 [
+        gototoilet
+        let px pxcor
+        let py pycor
+        set tcid tcid + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])
+        set tid tid + (count refugees with [pxcor = px and pycor = py])
+      ]
+      if x > 0.66 [
+        meetwithfriends
+        let px pxcor
+        let py pycor
+        set fm fm + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])
+      ]
     ]
     if hour = 13 [gohome]
-    if hour >= 14 and hour < 20 [
+    if hour = 14[
       let x random-float 1
-      if x < 0.33 [gototoilet]
-      if x > 0.66 [meetwithfriends]
+      if x < 0.33 [
+        gototoilet
+        let px pxcor
+        let py pycor
+        set tcid tcid + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])
+        set tid tid + (count refugees with [pxcor = px and pycor = py])
+      ]
+      if x > 0.66 [
+        meetwithfriends
+        let px pxcor
+        let py pycor
+        set fm fm + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])]
     ]
     if hour = 20 [gohome]
-    if hour >= 21 and hour < 23 [
+    if hour = 21 [
       let x random-float 1
-      if x < 0.33 [gototoilet]
-      if x > 0.66 [meetwithfriends]
+      if x < 0.33 [
+        gototoilet
+        let px pxcor
+        let py pycor
+        set tcid tcid + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])
+        set tid tid + (count refugees with [pxcor = px and pycor = py])]
+      if x > 0.66 [
+        meetwithfriends
+        let px pxcor
+        let py pycor
+        set fm fm + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])
+      ]
     ]
     if hour = 23 [gohome]
   ]
 
   ask refugees with [activitycategory = "Activity B"] [
-    if hour >= 4 and hour < 6 [
+    if hour = 1 [
+      set tcid 0
+      set tid 0
+      set nyd 0
+      set nzd 0
+      set fm 0
+    ]
+    if hour = 4 [
       let x random-float 1
-      if x < 0.5 [gototoilet]
+      if x < 0.5 [
+        gototoilet
+        let px pxcor
+        let py pycor
+        set tcid tcid + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])
+        set tid tid + (count refugees with [pxcor = px and pycor = py])]
       if x > 0.5 [gohome]
     ]
-    if hour >= 6 and hour < 9 [waitforfood]
+    if hour = 6 and hour < 9 [
+      waitforfood
+    ]
     if hour = 9 [gohome]
     if hour >= 10 and hour < 13 [waitforfood]
     if hour = 13 [gohome]
-    if hour >= 14 and hour < 17 [
+    if hour = 14 [
       let x random-float 1
-      if x < 0.33 [gototoilet]
-      if x > 0.66 [meetwithfriends]
+      if x < 0.33 [
+        gototoilet
+        let px pxcor
+        let py pycor
+        set tcid tcid + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])
+        set tid tid + (count refugees with [pxcor = px and pycor = py])
+      ]
+      if x > 0.66 [
+        meetwithfriends
+        let px pxcor
+        let py pycor
+        set fm fm + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])
+      ]
     ]
     if hour >= 17 and hour < 20 [waitforfood]
     if hour = 20 [gohome]
-    if hour >= 21 and hour < 23 [
+    if hour = 21 [
       let x random-float 1
-      if x < 0.33 [gototoilet]
-      if x > 0.66 [meetwithfriends]
+      if x < 0.33 [
+        gototoilet
+        let px pxcor
+        let py pycor
+        set tcid tcid + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])
+        set tid tid + (count refugees with [pxcor = px and pycor = py])
+      ]
+      if x > 0.66 [
+        meetwithfriends
+        let px pxcor
+        let py pycor
+        set fm fm + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])
+      ]
     ]
     if hour = 23 [gohome]
   ]
@@ -745,28 +860,215 @@ to meetwithfriends
   if member? activitylocation playareas = false [set activitylocation one-of playareas]
   ask Friend-neighbors [set activitylocation [activitylocation] of myself]
   move-to activitylocation
+  set home? FALSE
 end
 
 to gototoilet
   set activitylocation [patch-here] of min-one-of wash-n-sinks [distance myself] ;closest toilet
   move-to activitylocation
+  set home? FALSE
 end
 
 to waitforfood
   set activitylocation foodcenter
   move-to activitylocation
+  set home? FALSE
 end
 
 to gohome
   set activitylocation houselocation
   move-to activitylocation
+  set home? TRUE
 end
 
 
 ; Contagion Module:
+to disease
+  ask refugees with [status = "susceptible"][
+    infect
+    let pp random-float 1
+    if pp <= pid
+    [ set status "exposed"
+      set infected? FALSE
+      set day 0
+      set exp-duration (random-normal 6.4 2.3)
+      while [exp-duration < 0] [set exp-duration (random-normal 6.4 2.3)]
+    ]
+  ]
+  ask refugees with [status = "exposed"][
+    set day day + 1
+    ifelse day >= (exp-duration / 2)
+    [ set status "pre-symptomatic"
+      set infected? TRUE
+      set home? FALSE
+      set day 0
+    ]
+    [ set day day + 1 ]
+  ]
+  ask refugees with [status = "pre-symptomatic"][
+    set day day + 1
+    ifelse day >= (exp-duration)
+    [ ifelse age = "youth"
+      [
+        ifelse (random-float 1) < 0.836
+        [ set status "1-asymptomatic"
+          set day 0
+          set home? FALSE
+        ]
+        [ set status "symptomatic"
+          set day 0
+          set home? TRUE
+        ]
+      ]
+      [
+        ifelse (random-float 1) < 0.178
+        [ set status "1-asymptomatic"
+          set day 0
+          set home? FALSE
+        ]
+        [ set status "symptomatic"
+          set day 0
+          set home? TRUE
+        ]
+      ]
+    ]
+    [ set day day + 1 ]
+  ]
+  ask refugees with [status = "1-asymptomatic"][
+    set day day + 1
+    ifelse day >= 5
+    [ set status "2-asymptomatic"
+      set day 0
+      set home? FALSE
+    ]
+    [ set day day + 1 ]
+  ]
+  ask refugees with [status = "2-asymptomatic"][
+    set day day + 1
+    ifelse day >= 5
+    [
+      set status "recovered"
+      set infected? FALSE
+      set home? FALSE
+    ]
+    [
+      if (random-float 1) < 0.37
+      [
+        set status "recovered"
+        set infected? FALSE
+        set home? FALSE
+      ]
+    ]
+  ]
+  ask refugees with [status = "symptomatic"][
+    set day day + 1
+    ifelse (random-float 1) < 0.8
+      [
+        set status "mild"
+        set day 0
+        set home? TRUE
+    ]
+    [
+      set status "severe"
+      set day 0
+      set home? TRUE
+    ]
+  ]
+  ask refugees with [status = "mild"][
+    set day day + 1
+    ifelse day >= 5
+    [
+      set status "recovered"
+      set infected? FALSE
+      set home? FALSE
+    ]
+    [
+      if (random-float 1) < 0.37
+      [
+        set status "recovered"
+        set infected? FALSE
+        set home? FALSE
+      ]
+    ]
+  ]
+  ask refugees with [status = "severe"][
+    set day day + 1
+    ifelse day >= 12
+    [
+      set status "recovered"
+      set infected? FALSE
+      set home? FALSE
+    ]
+    [
+      if (random-float 1) < 0.071
+      [
+        set status "recovered"
+        set infected? FALSE
+        set home? FALSE
+      ]
+    ]
+  ]
+end
 
+to infect
+  ask refugees [
+    ;; toilet
+    ifelse activitycategory = "Activity A" [
+      ifelse tid != 0[
+        set pidt 1 - ((combination 4 0) * ((1 - tcid / tid) ^ 4) * ((tcid / tid) ^ 0) * ((1 - 0.051) ^ 0) + (combination 4 1) * ((1 - tcid / tid) ^ 3) * ((tcid / tid) ^ 1) * ((1 - 0.051) ^ 1) + (combination 4 2) * ((1 - tcid / tid) ^ 2) * ((tcid / tid) ^ 2) * ((1 - 0.051) ^ 2) + (combination 4 3) * ((1 - tcid / tid) ^ 1) * ((tcid / tid) ^ 3) * ((1 - 0.051) ^ 3) + (combination 4 4) * ((1 - tcid / tid) ^ 0) * ((tcid / tid) ^ 4) * ((1 - 0.051) ^ 4))
+      ]
+      [
+        set pidt 0
+      ]
+    ]
+    [
+      ifelse tid != 0[
+        set pidt 1 - ((combination 3 0) * ((1 - tcid / tid) ^ 3) * ((tcid / tid) ^ 0) * ((1 - 0.051) ^ 0) + (combination 3 1) * ((1 - tcid / tid) ^ 2) * ((tcid / tid) ^ 1) * ((1 - 0.051) ^ 1) + (combination 3 2) * ((1 - tcid / tid) ^ 1) * ((tcid / tid) ^ 2) * ((1 - 0.051) ^ 2) + (combination 3 3) * ((1 - tcid / tid) ^ 0) * ((tcid / tid) ^ 3) * ((1 - 0.051) ^ 3))
+      ]
+      [
+        set pidt 0
+      ]
+    ]
+    ;; household
+    let px pxcor
+    let py pycor
+    set hcid ((count refugees with [pxcor = px and pycor = py and infected? = TRUE]) - 1)
+    set pidh 1 - ((1 - 0.18) ^ hcid)
+    ;; foodline
+    set nyd (count refugees with [status = "pre-symptomatic" or status = "1-asymptomatic" or status = "2-asymptomatic"])
+    set nzd (count refugees with [status = "pre-symptomatic" or status = "1-asymptomatic" or status = "2-asymptomatic" or status = "susceptible" or status = "exposed" or status = "recovered"])
 
+    ifelse activitycategory = "Activity A" [
+      set pidf 0
+    ]
+    [
+      set pidf 0.75 - 0.75 * ((combination 4 0) * ((1 - nyd / nzd) ^ 4) * (( nyd / nzd) ^ 0) * ((1 - 0.23) ^ 0) + (combination 4 1) * ((1 - nyd / nzd) ^ 3) * (( nyd / nzd) ^ 1) * ((1 - 0.23) ^ 1) + (combination 4 2) * ((1 - nyd / nzd) ^ 2) * (( nyd / nzd) ^ 2) * ((1 - 0.23) ^ 2) + (combination 4 3) * ((1 - nyd / nzd) ^ 1) * (( nyd / nzd) ^ 3) * ((1 - 0.23) ^ 3) + (combination 4 4) * ((1 - nyd / nzd) ^ 0) * (( nyd / nzd) ^ 4) * ((1 - 0.23) ^ 4))
+    ]
+    ;; move
+    set pidm (1 - (1 - 0.0085) ^ (fm))
+    ;;all
+    set pid 1 - (1 - pidt) * (1 - pidh) * (1 - pidf) * (1 - pidm)
+  ]
+end
 
+to infect-one
+  ask one-of refugees with [infected? = FALSE] [
+    set status "exposed"
+    set infected? TRUE
+    set day 0
+    set exp-duration (random-normal 6.4 2.3)
+    while [exp-duration < 0 ][set exp-duration (random-normal 6.4 2.3)]
+  ]
+end
+to-report factorial [parameter]
+  if parameter > 0 [report parameter * factorial (parameter - 1)]
+  report 1
+end
+
+to-report combination [ #n #k ]
+  let comb ((factorial #n) / (factorial (#n - #k)) / (factorial #k))
+  report comb
+end
 ; Interventions Module:
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -865,6 +1167,40 @@ BUTTON
 63
 import world
 import
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+1261
+216
+1358
+249
+NIL
+infect-one
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+1169
+160
+1256
+193
+go-once
+go
 NIL
 1
 T
