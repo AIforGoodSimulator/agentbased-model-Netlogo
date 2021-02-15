@@ -1,9 +1,9 @@
 ;V2 NETLOGO CODE
 
 ; Model Setup
-extensions [ gis ]
+extensions [ gis ] ;allows model to import map data for Moria
 
-breed [refugees refugee]
+breed [refugees refugee] ; creates different types of objects in model
 breed [ sewage-tanks sewage-tank ]
 breed [ water-pumps water-pump ]
 breed [ wash-n-sinks wash-n-sink ]
@@ -11,25 +11,25 @@ breed [ tent-centroids tent-centroid ]
 breed [ sec-centroids sec-centroid ]
 undirected-link-breed [ Friends Friend ]
 
-tent-centroids-own [
+tent-centroids-own [ ; assigns a nationality, capacity, and certain demographic characteristics at a household level
   nationality
   hhnumber
   hhparents
   hhkids_elderly
 ]
 
-sec-centroids-own [
+sec-centroids-own [ ; assigns a nationality for camp areas for unaccompanied youth
   nationality
 ]
 
-refugees-own [
+refugees-own [ ; various characteristics of refugees
   nationality
   houselocation
   age
   sex
   activitycategory
   activitylocation
-  pdi
+  pdi ; these are parameters borrowed from the ASSOCC model to calculate values of refugees, see Notion (https://www.notion.so/aiforgoodsimulator/ABM-Netlogo-cffc3e285834429d8d727cbc1d1810ff#bfe231d121784c4db6bc41bae94481c3)
   idv
   mas
   uai
@@ -53,24 +53,15 @@ refugees-own [
   ig2-cft
   ig2-sec
   ig2-uni
-  tcid
+  tcid ; these are parameters borrowed from the Tucker model to calculate infection dynnamics per refugee
   tid
-  ti1
-  ti2
-  ti3
-  ti4
-  tp1
-  tp2
-  tp3
-  tp4
   infected?
   status
-  nyd
-  nzd
   fm
   pid
   home?
   exp-duration
+  duration
   pidt
   hcid
   pidh
@@ -131,7 +122,8 @@ globals [
   numberofunaccompaniedyouth
   hour
   day
-
+  nyd
+  nzd
 ]
 
 patches-own [
@@ -141,6 +133,7 @@ patches-own [
 to setup
   clear-all
   reset-ticks
+  ; following data sourced from Notion (https://www.notion.so/aiforgoodsimulator/v1-ConceptualModel-a67130a74bb64518a5834f5bdabb1f77#d36482388364439184473b5476e911e9)
   set male_percent 0.54 ; 6981/12883 = 54%
   set age_10 0.21 ; 2727/12883 = 21%
   set age_20 0.38 ; 4922/12883 = 38% ; youth cutoff
@@ -149,6 +142,7 @@ to setup
   set age_50 0.91 ; 11711/12883 = 91%
   set age_60 0.96 ; 12421/12883 = 96% ; adult cutoff
   set age_70 0.99 ; 12779/12883 = 99%
+  ; following data sourced from Notion (https://www.notion.so/aiforgoodsimulator/Moria-6b4436d250de4e1e990d13122c6477b6)
   set afghan 0.78 ; 7919/10135 = 78%
   set cameroon 0.795 ; 149/10135 = 1.5%
   set congo 0.865 ; 706/10135 = 7%
@@ -156,6 +150,7 @@ to setup
   set iraq 0.883 ; 83/10135 = 0.8%
   set somalia 0.923 ; 442/10135 = 4%
   set syria 1 ; 729/10135 = 7%
+  ; these values are borrowed from ASSOCC model (https://www.notion.so/aiforgoodsimulator/ABM-Netlogo-cffc3e285834429d8d727cbc1d1810ff#bfe231d121784c4db6bc41bae94481c3)
   set value_std_dev 10
   set max-friends 3
   set numberofunaccompaniedyouth 500
@@ -173,17 +168,17 @@ end
 
 ; Model Go
 to go
-  set hour floor (ticks mod 24) ;the ticks are 10 minutes, so this translates it into hours
-  set day floor (ticks / 24) + 1 ;the ticks are 10 minutes, so this translates it into days
-  activity
-  disease
+  set hour floor (ticks mod 24) ;the ticks are hours, so this translates it into hour of day
+  set day floor (ticks / 24) + 1 ;the ticks are hours, so this translates it into days
+  activity ; abstract set of activities for agents
+  diseaseprogress ; moves through stages of infection for those who are exposed
   tick
 end
 
 
 ;Physical Layout Module:
 
-to load-data
+to load-data ; loads GIS files for Moria camp, see Notion (https://www.notion.so/aiforgoodsimulator/ABM-Netlogo-cffc3e285834429d8d727cbc1d1810ff#93023fd22aa447dfad7ed4d6a9a5d6a6)
   set det-building-dataset gis:load-dataset "Detention_Buildings.shp"
   set gov-building-dataset gis:load-dataset "Government_Buildings.shp"
   ;set isobox-double-dataset gis:load-dataset "ISObox double.shp"
@@ -368,12 +363,12 @@ to display-buildings
   ]
 end
 
-to export
+to export ;allows export of the generated camp in order to prevent the need to re-setup the model again (since some parameters are random)
   let x user-input "Enter filename: "
   export-world x
 end
 
-to import
+to import ;allows import of a previous generated camp in order to prevent the need to re-setup the model again (since some parameters are random)
   clear-all
   reset-ticks
   let x user-input "Enter filename: "
@@ -382,7 +377,7 @@ end
 
 ;Agent Module:
 
-to setage
+to setage ; transforms age categories into youth, adult, and elderly for simplicity
   let dice1 random-float 1
   set age (ifelse-value
     dice1 < age_20 ["youth"] ; youth are below 20
@@ -407,7 +402,7 @@ to setnationality
     ["syria"])
 end
 
-to sethhcharacteristics ; used data from UN
+to sethhcharacteristics ; used data from UN (https://www.un.org/en/development/desa/population/publications/pdf/ageing/household_size_and_composition_around_the_world_2017_data_booklet.pdf)
   let dice4 random-float 1
   (ifelse
     nationality = "afghan" [
@@ -531,7 +526,7 @@ to sethhcharacteristics ; used data from UN
   )
 end
 
-to setculture
+to setculture ; uses data from Hofstede (https://www.hofstede-insights.com/product/compare-countries/)
   (ifelse
     nationality = "afghan" [ ; used Hofstede dimensions from Pakistan
       set pdi 55
@@ -592,7 +587,7 @@ to setculture
   )
 end
 
-to setvalues
+to setvalues ; follows approach from ASSOCC model (https://www.notion.so/aiforgoodsimulator/v1-ConceptualModel-a67130a74bb64518a5834f5bdabb1f77#3f2e47d26bd14cc99b732cbb90784a8b)
   set ach (idv + mas) / 2
   set pow (idv + uai + mas) / 3
   set hed (idv + ivr) / 2
@@ -614,7 +609,7 @@ to setvalues
   set ig2-uni (random-normal (uni) (value_std_dev))
 end
 
-to setkidselderly
+to setkidselderly ; sets number of kids / elderly in households with both
   (ifelse
     [hhkids_elderly] of tent-centroids-here = "kids only" [ set age "youth" setsex ]
     [hhkids_elderly] of tent-centroids-here = "elderly only" [ set age "elderly" setsex ]
@@ -624,15 +619,15 @@ to setkidselderly
   )
 end
 
-to createpeople
+to createpeople ; creates refugees in each tent based on UN data, Moria data, and ASSOCC values methodology
   ask tent-centroids [
     setnationality
     sethhcharacteristics
     ask patch-here [
-      sprout-refugees [hhnumber] of myself [ sproutsettings ]
+      sprout-refugees [hhnumber] of myself [ sproutsettings ] ; creates refugees based on set capacity of the tent / household
     ]
-    (ifelse
-      hhnumber = 1 [ ask refugees-here [
+    (ifelse ; sets the Activity category of the refugee depending on their demographics
+      hhnumber = 1 [ ask refugees-here [ ; these are single person households
         let x random-float 1
         ifelse x < 0.96 [set age "adult"] [set age "elderly"] ;unaccompanied youth have their own area, so are not in tents
         setsex
@@ -640,14 +635,14 @@ to createpeople
         if age = "adult" and sex = "female" [set activitycategory "Activity B"]
         if age = "eldery" [set activitycategory "Activity B"]
       ]]
-      hhnumber > 1 [
+      hhnumber > 1 [ ; these are families
         (ifelse
-          hhparents = "father only" [
+          hhparents = "father only" [ ; families with only father
             ask one-of refugees-here [ set age "adult" set sex "male" set activitycategory "Activity B"
               ask other refugees-here [ setkidselderly if age = "youth" [set activitycategory "Activity A"] if age = "elderly" [set activitycategory "Activity A"]]
             ]
           ]
-          hhparents = "mother only" [
+          hhparents = "mother only" [ ; families with only mother
             ask one-of refugees-here [ set age "adult" set sex "female" set activitycategory "Activity B"
               ask other refugees-here [ setkidselderly if age = "youth" [set activitycategory "Activity A"] if age = "elderly" [set activitycategory "Activity A"]]
             ]
@@ -669,14 +664,14 @@ to createpeople
       ask refugees-here [set age "youth" setsex set activitycategory "Activity A"]
     ]
   ]
-  ask refugees [
+  ask refugees [ ; inital infection settings
     set infected? FALSE
     set status "susceptible"
     set home? TRUE
   ]
 end
 
-to sproutsettings
+to sproutsettings ; sets culture, values, nationality, household and shape for refugees
   set color white
   set shape "person"
   set nationality [nationality] of tent-centroids-here
@@ -685,8 +680,8 @@ to sproutsettings
   setvalues
 end
 
-;Network Module: save network
-to-report value-euclidean-distance [other-agent]
+;Network Module:
+to-report value-euclidean-distance [other-agent] ; follows approach from ASSOCC model, see Notion (https://www.notion.so/aiforgoodsimulator/v1-ConceptualModel-a67130a74bb64518a5834f5bdabb1f77#830eb364fce54e729f1bf7d570911746)
   report sqrt sum (list
     ((ig2-hed - [ig2-hed] of other-agent) ^ 2)
     ((ig2-stm - [ig2-stm] of other-agent) ^ 2)
@@ -703,7 +698,7 @@ to-report possible-friends
   report other refugees with [ houselocation != [houselocation] of myself and age = [age] of myself ]
 end
 
-to createfriendlinks
+to createfriendlinks ; creates friends based on values following approach from ASSOCC model
   ask refugees [
     if count my-links = 0 [create-Friends-with turtle-set up-to-n-of max-friends (sort-on [value-euclidean-distance myself] possible-friends)]
     ask my-links [hide-link]
@@ -711,166 +706,61 @@ to createfriendlinks
 end
 
 
-
 ; Activity Module:
 
 ; ticks are 1 hour intervals
 
-to activity
+to activity ; creates abstract activities for agents to follow - basically 4 main activities - being home, going to the toilet / shower, waiting in line, meeting with friends
   ask refugees with [activitycategory = "Activity A"] [
-    if hour = 1 [
+    if hour = 1 [ ;reset counters to calculate probability of infection
       set tcid 0
       set tid 0
+      set hcid 0
       set nyd 0
       set nzd 0
       set fm 0
     ]
-    if hour < 6 [gohome]
-    if hour = 6 [
-      let x random-float 1
-      if x < 0.33 [
-        gototoilet
-        let px pxcor
-        let py pycor
-        set tcid tcid + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])
-        set tid tid + (count refugees with [pxcor = px and pycor = py])
-      ]
-      if x > 0.66 [
-        meetwithfriends
-        let px pxcor
-        let py pycor
-        set fm fm + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])
-      ]
-    ]
-    if hour = 9 [gohome]
-    if hour = 10 [
-      let x random-float 1
-      if x < 0.33 [
-        gototoilet
-        let px pxcor
-        let py pycor
-        set tcid tcid + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])
-        set tid tid + (count refugees with [pxcor = px and pycor = py])
-      ]
-      if x > 0.66 [
-        meetwithfriends
-        let px pxcor
-        let py pycor
-        set fm fm + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])
-      ]
-    ]
-    if hour = 13 [gohome]
-    if hour = 14[
-      let x random-float 1
-      if x < 0.33 [
-        gototoilet
-        let px pxcor
-        let py pycor
-        set tcid tcid + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])
-        set tid tid + (count refugees with [pxcor = px and pycor = py])
-      ]
-      if x > 0.66 [
-        meetwithfriends
-        let px pxcor
-        let py pycor
-        set fm fm + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])]
-    ]
-    if hour = 20 [gohome]
-    if hour = 21 [
-      let x random-float 1
-      if x < 0.33 [
-        gototoilet
-        let px pxcor
-        let py pycor
-        set tcid tcid + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])
-        set tid tid + (count refugees with [pxcor = px and pycor = py])]
-      if x > 0.66 [
-        meetwithfriends
-        let px pxcor
-        let py pycor
-        set fm fm + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])
-      ]
-    ]
-    if hour = 23 [gohome]
+    if hour < 6 or hour = 9 or hour = 13 or hour = 20 or hour = 23 [gohome] ; wake up at 6, eat breakfast at home at 9, eat lunch at home at 13, eat dinner at home at 20, go home to sleep at 23
+    if hour = 6 or hour = 14 or hour = 21 [gototoilet] ; shower for 2 hours after waking up, go to toilet for one hour after lunch and dinner
+    if hour = 8 or hour = 11 or hour = 15 or hour = 22 [meetwithfriends] ; meet up with friends rest of the day
   ]
 
   ask refugees with [activitycategory = "Activity B"] [
-    if hour = 1 [
+    if hour = 1 [ ;reset counters to calculate probability of infection
       set tcid 0
       set tid 0
+      set hcid 0
       set nyd 0
       set nzd 0
       set fm 0
     ]
-    if hour = 4 [
-      let x random-float 1
-      if x < 0.5 [
-        gototoilet
-        let px pxcor
-        let py pycor
-        set tcid tcid + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])
-        set tid tid + (count refugees with [pxcor = px and pycor = py])]
-      if x > 0.5 [gohome]
-    ]
-    if hour = 6 and hour < 9 [
-      waitforfood
-    ]
-    if hour = 9 [gohome]
-    if hour >= 10 and hour < 13 [waitforfood]
-    if hour = 13 [gohome]
-    if hour = 14 [
-      let x random-float 1
-      if x < 0.33 [
-        gototoilet
-        let px pxcor
-        let py pycor
-        set tcid tcid + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])
-        set tid tid + (count refugees with [pxcor = px and pycor = py])
-      ]
-      if x > 0.66 [
-        meetwithfriends
-        let px pxcor
-        let py pycor
-        set fm fm + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])
-      ]
-    ]
-    if hour >= 17 and hour < 20 [waitforfood]
-    if hour = 20 [gohome]
-    if hour = 21 [
-      let x random-float 1
-      if x < 0.33 [
-        gototoilet
-        let px pxcor
-        let py pycor
-        set tcid tcid + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])
-        set tid tid + (count refugees with [pxcor = px and pycor = py])
-      ]
-      if x > 0.66 [
-        meetwithfriends
-        let px pxcor
-        let py pycor
-        set fm fm + (count refugees with [pxcor = px and pycor = py and infected? = TRUE])
-      ]
-    ]
-    if hour = 23 [gohome]
+    if hour < 4 or hour = 9 or hour = 13 or hour = 20 or hour = 23 [gohome] ; wake up at 6, eat breakfast at home at 9, eat lunch at home at 13, eat dinner at home at 20, go home to sleep at 23
+    if hour = 4 or hour = 14 or hour = 21 [gototoilet] ; shower for 2 hours after waking up, go to toilet for one hour after lunch and dinner
+    if hour = 6 or hour = 10 or hour = 17 [waitforfood] ; wait in the food line to pick up food
+    if hour = 15 or hour = 22 [meetwithfriends] ; meet up with friends with remaining free time
   ]
+
+  exposure
 end
 
-to meetwithfriends
-  if member? activitylocation playareas = false [set activitylocation one-of playareas]
-  ask Friend-neighbors [set activitylocation [activitylocation] of myself]
+to meetwithfriends ; movement of agents to meet friends
+  if member? activitylocation playareas = false [set activitylocation one-of playareas] ; one of the friends picks a place to meet up
+  ask Friend-neighbors [set activitylocation [activitylocation] of myself] ; connected friends meet up at selected location
   move-to activitylocation
+  set fm (count refugees-here with [infected? = TRUE]) ; counts how many friends are infected
   set home? FALSE
 end
 
 to gototoilet
-  set activitylocation [patch-here] of min-one-of wash-n-sinks [distance myself] ;closest toilet
+  set activitylocation [patch-here] of min-one-of wash-n-sinks [distance myself] ;picks closest toilet to go to
   move-to activitylocation
+  set tcid (count refugees-here with [infected? = TRUE]) ; counts number of infected people in line at the toilet, following Tucker model
+  set tid (count refugees-here) ; counts total number of people in the line at the toilet, following Tucker model
   set home? FALSE
 end
 
 to waitforfood
-  set activitylocation foodcenter
+  set activitylocation foodcenter ; waiting in line to get food at the food center
   move-to activitylocation
   set home? FALSE
 end
@@ -878,197 +768,218 @@ end
 to gohome
   set activitylocation houselocation
   move-to activitylocation
+  set hcid (count other refugees-here with [infected? = TRUE])
   set home? TRUE
 end
 
-
 ; Contagion Module:
-to disease
+to exposure
+  ; follows Tucker model logic but on an hourly basis instead of on a daily basis, parameters from Tucker Model python code (https://github.com/AIforGoodSimulator/agentbased-model-matlab/blob/master/tuckerabm.py)
+  set nyd (count refugees with [status = "pre-symptomatic" or status = "1-asymptomatic" or status = "2-asymptomatic"]) ;number of infected without symptoms
+  set nzd (count refugees with [status != "symptomatic" or status != "mild" or status != "severe"]) ;number of total without symptoms
+
   ask refugees with [status = "susceptible"][
-    infect
+    ; meetwithfriends infection following Tucker model logic for infection transmission while moving around
+    set pidm (1 - (1 - 0.017) ^ (fm)) ; uses P_M number from Tucker model python code (https://github.com/AIforGoodSimulator/agentbased-model-matlab/blob/master/tuckerabm.py)
+
+    ; toilet exposure following Tucker model binomial probability logic - can get infected by someone in front of line or back of line in toilet
+    if tid != 0[
+      ; uses P_T number from Tucker model python code (https://github.com/AIforGoodSimulator/agentbased-model-matlab/blob/master/tuckerabm.py)
+      set pidt 1 - (
+        ((1 - tcid / tid) ^ 2) +
+        2 * ((1 - tcid / tid) ^ 1) * ((tcid / tid) ^ 1) * ((1 - 0.099) ^ 1) +
+        ((tcid / tid) ^ 2) * ((1 - 0.099) ^ 2)
+      )
+    ]
+
+    ; waitforfood infection following Tucker model binomial probability logic - can get infected by someone in front of line or back of line in food line
+    ; does not make same assumptions as Tucker regarding standing in line for 3 out of 4 days - assumes that people line up for food every day
+    if activitycategory = "Activity B" [
+      ; uses P_M number from Tucker model python code (https://github.com/AIforGoodSimulator/agentbased-model-matlab/blob/master/tuckerabm.py)
+      set pidf 1 - (
+        ((1 - nyd / nzd) ^ 2) +
+        2 * ((1 - nyd / nzd) ^ 1) * ((nyd / nzd) ^ 1) * ((1 - 0.407) ^ 1) +
+        ((nyd / nzd) ^ 2) * ((1 - 0.407) ^ 2)
+      )
+    ]
+
+    ; household infection following Tucker model logic - can get infected based on number of infected people at home
+    set pidh 1 - ((1 - 0.33) ^ hcid) ; uses P_H number from Tucker model python code (https://github.com/AIforGoodSimulator/agentbased-model-matlab/blob/master/tuckerabm.py)
+
+    ; final infection calculation
+    set pid 1 - (1 - pidt) * (1 - pidh) * (1 - pidf) * (1 - pidm) ; follows final calculation equation 1 from Tucker Model paper (https://www.medrxiv.org/content/10.1101/2020.07.07.20140996v2.full.pdf)
+
+    ; infection using probability
     let pp random-float 1
     if pp <= pid
     [ set status "exposed"
-      set infected? FALSE
-      set day 0
-      set exp-duration (random-normal 6.4 2.3)
+      set infected? TRUE
+      set duration 0
+      set exp-duration (random-normal 6.4 2.3) ; exposure duration described in Tucker Model paper (https://www.medrxiv.org/content/10.1101/2020.07.07.20140996v2.full.pdf)
       while [exp-duration < 0] [set exp-duration (random-normal 6.4 2.3)]
     ]
   ]
+end
+
+
+to infect-one ; kick-starts infection process by infecting one refugee at random, can be run at any time in the Interface
+  ask one-of refugees with [status = "susceptible"] [
+    set status "exposed"
+    set infected? TRUE
+    set duration 0
+    set exp-duration (random-normal 6.4 2.3)
+    while [exp-duration < 0 ][set exp-duration (random-normal 6.4 2.3)]
+  ]
+end
+
+
+
+to diseaseprogress ; follows disease progression described in Tucker Model paper (https://www.medrxiv.org/content/10.1101/2020.07.07.20140996v2.full.pdf)
+  ; duration is in hours, while exposure duration is in days and other disease progression is in days
   ask refugees with [status = "exposed"][
-    set day day + 1
-    ifelse day >= (exp-duration / 2)
+    ifelse duration / 24 >= (exp-duration / 2) ; second half of exposure duration the infected person is pre-symptomatic
     [ set status "pre-symptomatic"
       set infected? TRUE
       set home? FALSE
-      set day 0
+      set duration 0
     ]
-    [ set day day + 1 ]
+    [ set duration duration + 1 ]
   ]
   ask refugees with [status = "pre-symptomatic"][
-    set day day + 1
-    ifelse day >= (exp-duration)
+    ifelse duration / 24 >= (exp-duration) ; after exposure duration they are either asymptomatic or symptomatic
     [ ifelse age = "youth"
       [
         ifelse (random-float 1) < 0.836
         [ set status "1-asymptomatic"
-          set day 0
+          set duration 0
           set home? FALSE
         ]
         [ set status "symptomatic"
-          set day 0
+          set duration 0
           set home? TRUE
         ]
       ]
       [
         ifelse (random-float 1) < 0.178
         [ set status "1-asymptomatic"
-          set day 0
+          set duration 0
           set home? FALSE
         ]
         [ set status "symptomatic"
-          set day 0
+          set duration 0
           set home? TRUE
         ]
       ]
     ]
-    [ set day day + 1 ]
+    [ set duration duration + 1 ]
   ]
-  ask refugees with [status = "1-asymptomatic"][
-    set day day + 1
-    ifelse day >= 5
+  ask refugees with [status = "1-asymptomatic"][ ;after 5 days in 1st level asymptomatic, they pass to 2nd level asymptomatic
+    ifelse duration / 24 >= 5
     [ set status "2-asymptomatic"
-      set day 0
+      set duration 0
       set home? FALSE
     ]
-    [ set day day + 1 ]
+    [ set duration duration + 1 ]
   ]
-  ask refugees with [status = "2-asymptomatic"][
-    set day day + 1
-    ifelse day >= 5
+  ask refugees with [status = "2-asymptomatic"][ ;after 5 days in 2nd level asymptomatic, they recover
+    set duration duration + 1
+    ifelse duration / 24 >= 5
     [
       set status "recovered"
       set infected? FALSE
       set home? FALSE
+      set duration 0
     ]
     [
-      if (random-float 1) < 0.37
+      if (random-float 1) < 0.37 ; each day there is a probability of recovering faster
       [
         set status "recovered"
         set infected? FALSE
         set home? FALSE
+        set duration 0
       ]
     ]
   ]
   ask refugees with [status = "symptomatic"][
-    set day day + 1
-    ifelse (random-float 1) < 0.8
+    ifelse duration / 24 >= 5 ; after 5 days in symptomatic they develop a mild or sever case with a certain probability based on age group used averages from buckets in Tucker Model ABM (https://github.com/AIforGoodSimulator/agentbased-model-matlab/blob/master/abm.py)
+    [ (ifelse age = "youth"
       [
-        set status "mild"
-        set day 0
-        set home? TRUE
+        ifelse (random-float 1) > 0.02055 ; average of 0.0101, 0.0209 from Verity et al. corrected for Tuite
+        [ set status "mild"
+          set duration 0
+          set home? TRUE
+        ]
+        [ set status "severe"
+          set duration 0
+          set home? TRUE
+        ]
+      ]
+      age = "adult"
+      [
+        ifelse (random-float 1) > 0.09865 ; average of 0.0410, 0.0642, 0.0721, 0.2173 from Verity et al. corrected for Tuite
+        [ set status "mild"
+          set duration 0
+          set home? TRUE
+        ]
+        [ set status "severe"
+          set duration 0
+          set home? TRUE
+        ]
+      ]
+      age = "elderly"
+      [
+        ifelse (random-float 1) > 0.5464 ; average of 0.2483, 0.6921, 0.6987 from Verity et al. corrected for Tuite
+        [ set status "mild"
+          set duration 0
+          set home? TRUE
+        ]
+        [ set status "severe"
+          set duration 0
+          set home? TRUE
+        ]
+      ])
     ]
-    [
-      set status "severe"
-      set day 0
-      set home? TRUE
-    ]
+    [ set duration duration + 1 ]
   ]
   ask refugees with [status = "mild"][
-    set day day + 1
-    ifelse day >= 5
+    ifelse duration / 24 >= 5 ;after 5 days in mild case, they recover (or die, though deaths are not explicitly modeled)
     [
       set status "recovered"
       set infected? FALSE
       set home? FALSE
+      set duration 0
     ]
     [
-      if (random-float 1) < 0.37
+      if duration mod 24 = 0 and (random-float 1) < 0.37 ; each day there is a probability of recovering faster
       [
         set status "recovered"
         set infected? FALSE
         set home? FALSE
+        set duration 0
       ]
     ]
   ]
   ask refugees with [status = "severe"][
-    set day day + 1
-    ifelse day >= 12
+    ifelse duration / 24 >= 12 ; after 12 days in a severe case, they recover (or die, though deaths are not explicitly modeled)
     [
       set status "recovered"
       set infected? FALSE
       set home? FALSE
+      set duration 0
     ]
     [
-      if (random-float 1) < 0.071
+      if duration mod 24 = 0 and (random-float 1) < 0.071 ; each day there is a probability of recovering faster
       [
         set status "recovered"
         set infected? FALSE
         set home? FALSE
+        set duration 0
       ]
     ]
   ]
 end
 
-to infect
-  ask refugees [
-    ;; toilet
-    ifelse activitycategory = "Activity A" [
-      ifelse tid != 0[
-        set pidt 1 - ((combination 4 0) * ((1 - tcid / tid) ^ 4) * ((tcid / tid) ^ 0) * ((1 - 0.051) ^ 0) + (combination 4 1) * ((1 - tcid / tid) ^ 3) * ((tcid / tid) ^ 1) * ((1 - 0.051) ^ 1) + (combination 4 2) * ((1 - tcid / tid) ^ 2) * ((tcid / tid) ^ 2) * ((1 - 0.051) ^ 2) + (combination 4 3) * ((1 - tcid / tid) ^ 1) * ((tcid / tid) ^ 3) * ((1 - 0.051) ^ 3) + (combination 4 4) * ((1 - tcid / tid) ^ 0) * ((tcid / tid) ^ 4) * ((1 - 0.051) ^ 4))
-      ]
-      [
-        set pidt 0
-      ]
-    ]
-    [
-      ifelse tid != 0[
-        set pidt 1 - ((combination 3 0) * ((1 - tcid / tid) ^ 3) * ((tcid / tid) ^ 0) * ((1 - 0.051) ^ 0) + (combination 3 1) * ((1 - tcid / tid) ^ 2) * ((tcid / tid) ^ 1) * ((1 - 0.051) ^ 1) + (combination 3 2) * ((1 - tcid / tid) ^ 1) * ((tcid / tid) ^ 2) * ((1 - 0.051) ^ 2) + (combination 3 3) * ((1 - tcid / tid) ^ 0) * ((tcid / tid) ^ 3) * ((1 - 0.051) ^ 3))
-      ]
-      [
-        set pidt 0
-      ]
-    ]
-    ;; household
-    let px pxcor
-    let py pycor
-    set hcid ((count refugees with [pxcor = px and pycor = py and infected? = TRUE]) - 1)
-    set pidh 1 - ((1 - 0.18) ^ hcid)
-    ;; foodline
-    set nyd (count refugees with [status = "pre-symptomatic" or status = "1-asymptomatic" or status = "2-asymptomatic"])
-    set nzd (count refugees with [status = "pre-symptomatic" or status = "1-asymptomatic" or status = "2-asymptomatic" or status = "susceptible" or status = "exposed" or status = "recovered"])
 
-    ifelse activitycategory = "Activity A" [
-      set pidf 0
-    ]
-    [
-      set pidf 0.75 - 0.75 * ((combination 4 0) * ((1 - nyd / nzd) ^ 4) * (( nyd / nzd) ^ 0) * ((1 - 0.23) ^ 0) + (combination 4 1) * ((1 - nyd / nzd) ^ 3) * (( nyd / nzd) ^ 1) * ((1 - 0.23) ^ 1) + (combination 4 2) * ((1 - nyd / nzd) ^ 2) * (( nyd / nzd) ^ 2) * ((1 - 0.23) ^ 2) + (combination 4 3) * ((1 - nyd / nzd) ^ 1) * (( nyd / nzd) ^ 3) * ((1 - 0.23) ^ 3) + (combination 4 4) * ((1 - nyd / nzd) ^ 0) * (( nyd / nzd) ^ 4) * ((1 - 0.23) ^ 4))
-    ]
-    ;; move
-    set pidm (1 - (1 - 0.0085) ^ (fm))
-    ;;all
-    set pid 1 - (1 - pidt) * (1 - pidh) * (1 - pidf) * (1 - pidm)
-  ]
-end
-
-to infect-one
-  ask one-of refugees with [infected? = FALSE] [
-    set status "exposed"
-    set infected? TRUE
-    set day 0
-    set exp-duration (random-normal 6.4 2.3)
-    while [exp-duration < 0 ][set exp-duration (random-normal 6.4 2.3)]
-  ]
-end
-to-report factorial [parameter]
-  if parameter > 0 [report parameter * factorial (parameter - 1)]
-  report 1
-end
-
-to-report combination [ #n #k ]
-  let comb ((factorial #n) / (factorial (#n - #k)) / (factorial #k))
-  report comb
-end
 ; Interventions Module:
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -1092,8 +1003,8 @@ GRAPHICS-WINDOW
 500
 -500
 500
-0
-0
+1
+1
 1
 ticks
 30.0
@@ -1116,10 +1027,10 @@ NIL
 1
 
 BUTTON
-1115
-86
-1179
-120
+1273
+98
+1337
+132
 NIL
 go
 T
@@ -1133,10 +1044,10 @@ NIL
 0
 
 MONITOR
-1198
-86
-1262
-131
+1118
+93
+1182
+138
 NIL
 hour
 17
@@ -1178,10 +1089,10 @@ NIL
 1
 
 BUTTON
-1261
-216
-1358
-249
+1116
+179
+1213
+212
 NIL
 infect-one
 NIL
@@ -1195,10 +1106,10 @@ NIL
 1
 
 BUTTON
-1169
-160
-1256
-193
+1353
+99
+1440
+132
 go-once
 go
 NIL
@@ -1210,6 +1121,142 @@ NIL
 NIL
 NIL
 1
+
+MONITOR
+1092
+269
+1201
+315
+susceptible
+count refugees with [status = \"susceptible\"]
+1
+1
+11
+
+MONITOR
+1090
+327
+1202
+373
+exposed
+count refugees with [status = \"exposed\"]
+17
+1
+11
+
+MONITOR
+1092
+383
+1198
+428
+pre-symptomatic
+count refugees with [status = \"pre-symptomatic\"]
+17
+1
+11
+
+MONITOR
+1092
+440
+1202
+486
+1-asymptomatic
+count refugees with [status = \"1-asymptomatic\"]
+17
+1
+11
+
+MONITOR
+1093
+499
+1203
+545
+2-asymptomatic
+count refugees with [status = \"2-asymptomatic\"]
+17
+1
+11
+
+MONITOR
+1095
+563
+1207
+609
+symptomatic
+count refugees with [status = \"symptomatic\"]
+17
+1
+11
+
+MONITOR
+1095
+627
+1207
+673
+mild
+count refugees with [status = \"mild\"]
+17
+1
+11
+
+MONITOR
+1095
+684
+1207
+730
+severe
+count refugees with [status = \"severe\"]
+17
+1
+11
+
+MONITOR
+1097
+747
+1210
+793
+recovered
+count refugees with [status = \"recovered\"]
+17
+1
+11
+
+PLOT
+1240
+272
+1830
+794
+Infection Progression
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+true
+"" ""
+PENS
+"Susceptible" 1.0 0 -16777216 true "" "plot count refugees with [status = \"susceptible\"]"
+"Exposed" 1.0 0 -6459832 true "" "plot count refugees with [status = \"exposed\"]"
+"Pre-symptomatic" 1.0 0 -2064490 true "" "plot count refugees with [status = \"pre-symptomatic\"]"
+"1-Asymptomatic" 1.0 0 -13791810 true "" "plot count refugees with [status = \"1-asymptomatic\"]"
+"2-Asymptomatic" 1.0 0 -13345367 true "" "plot count refugees with [status = \"2-asymptomatic\"]"
+"Symptomatic" 1.0 0 -3844592 true "" "plot count refugees with [status = \"symptomatic\"]"
+"Mild" 1.0 0 -2674135 true "" "plot count refugees with [status = \"mild\"]"
+"Severe" 1.0 0 -5825686 true "" "plot count refugees with [status = \"severe\"]"
+"Recovered" 1.0 0 -14439633 true "" "plot count refugees with [status = \"recovered\"]"
+
+MONITOR
+1199
+93
+1257
+139
+NIL
+day
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
