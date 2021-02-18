@@ -29,6 +29,7 @@ refugees-own [ ; various characteristics of refugees
   sex
   activitycategory
   activitylocation
+  closesttoilet ;finds closest toilet to houselocation
   pdi ; these are parameters borrowed from the ASSOCC model to calculate values of refugees, see Notion (https://www.notion.so/aiforgoodsimulator/ABM-Netlogo-cffc3e285834429d8d727cbc1d1810ff#bfe231d121784c4db6bc41bae94481c3)
   idv
   mas
@@ -59,7 +60,7 @@ refugees-own [ ; various characteristics of refugees
   status
   fm
   pid
-  home?
+  stayhome? ;whether refugees should stay home because of symptoms
   exp-duration
   duration
   pidt
@@ -67,6 +68,9 @@ refugees-own [ ; various characteristics of refugees
   pidh
   pidm
   pidf
+  obey? ;whether refugee will obey the rules and follow interventions - based on values
+  facemaskfactor ;adjusts probability of infection if facemasks are made available
+  isolated? ;whether the refugee will be isolated if they show symptoms
 ]
 
 globals [
@@ -102,6 +106,7 @@ globals [
   zones-on-31219-dataset
   playareas
   foodcenter
+  isolationcenter
   male_percent
   age_10
   age_20
@@ -163,6 +168,8 @@ to setup
   createfriendlinks
   ask patch 40 -60 [set playareas patches with [pcolor = black] in-radius 250 ]
   set foodcenter patch -28 -99
+  set isolationcenter patch -420 440
+  ask isolationcenter [ask patches in-radius 20 [set pcolor violet]]
 end
 
 
@@ -170,7 +177,9 @@ end
 to go
   set hour floor (ticks mod 24) ;the ticks are hours, so this translates it into hour of day
   set day floor (ticks / 24) + 1 ;the ticks are hours, so this translates it into days
+  intervene ; determines refugee's probability of obeying intervention and adjusts activities and probabilities if they obey
   activity ; abstract set of activities for agents
+  exposure ; exposes infection to susceptible individuals
   diseaseprogress ; moves through stages of infection for those who are exposed
   tick
 end
@@ -607,6 +616,7 @@ to setvalues ; follows approach from ASSOCC model (https://www.notion.so/aiforgo
   set ig2-cft (random-normal (cft) (value_std_dev))
   set ig2-sec (random-normal (sec) (value_std_dev))
   set ig2-uni (random-normal (uni) (value_std_dev))
+
 end
 
 to setkidselderly ; sets number of kids / elderly in households with both
@@ -667,7 +677,9 @@ to createpeople ; creates refugees in each tent based on UN data, Moria data, an
   ask refugees [ ; inital infection settings
     set infected? FALSE
     set status "susceptible"
-    set home? TRUE
+    set stayhome? FALSE
+    set closesttoilet [patch-here] of min-one-of wash-n-sinks [distance myself]
+    set isolated? FALSE
   ]
 end
 
@@ -711,65 +723,71 @@ end
 ; ticks are 1 hour intervals
 
 to activity ; creates abstract activities for agents to follow - basically 4 main activities - being home, going to the toilet / shower, waiting in line, meeting with friends
-  ask refugees with [activitycategory = "Activity A"] [
-    if hour = 1 [ ;reset counters to calculate probability of infection
-      set tcid 0
-      set tid 0
-      set hcid 0
-      set nyd 0
-      set nzd 0
-      set fm 0
-    ]
-    if hour < 6 or hour = 9 or hour = 13 or hour = 20 or hour = 23 [gohome] ; wake up at 6, eat breakfast at home at 9, eat lunch at home at 13, eat dinner at home at 20, go home to sleep at 23
-    if hour = 6 or hour = 14 or hour = 21 [gototoilet] ; shower for 2 hours after waking up, go to toilet for one hour after lunch and dinner
-    if hour = 8 or hour = 11 or hour = 15 or hour = 22 [meetwithfriends] ; meet up with friends rest of the day
-  ]
+  ask refugees [
+    ifelse isolated? = TRUE [move-to isolationcenter]
+      [
+        ifelse stayhome? = TRUE [gohome]
+        [
+          if activitycategory = "Activity A" [
+            if hour = 1 [ ;reset counters to calculate probability of infection
+              set tcid 0
+              set tid 0
+              set hcid 0
+              set nyd 0
+              set nzd 0
+              set fm 0
+            ]
+            if hour < 6 or hour = 9 or hour = 13 or hour = 20 or hour = 23 [gohome] ; wake up at 6, eat breakfast at home at 9, eat lunch at home at 13, eat dinner at home at 20, go home to sleep at 23
+            if hour = 6 or hour = 14 or hour = 21 [gototoilet] ; shower for 2 hours after waking up, go to toilet for one hour after lunch and dinner
+            if hour = 8 or hour = 11 or hour = 15 or hour = 22 [
+              ifelse lockdown = true and obey? = true [gohome][meetwithfriends] ; meet up with friends rest of the day unless there is a lockdown
+            ]
+          ]
 
-  ask refugees with [activitycategory = "Activity B"] [
-    if hour = 1 [ ;reset counters to calculate probability of infection
-      set tcid 0
-      set tid 0
-      set hcid 0
-      set nyd 0
-      set nzd 0
-      set fm 0
-    ]
-    if hour < 4 or hour = 9 or hour = 13 or hour = 20 or hour = 23 [gohome] ; wake up at 6, eat breakfast at home at 9, eat lunch at home at 13, eat dinner at home at 20, go home to sleep at 23
-    if hour = 4 or hour = 14 or hour = 21 [gototoilet] ; shower for 2 hours after waking up, go to toilet for one hour after lunch and dinner
-    if hour = 6 or hour = 10 or hour = 17 [waitforfood] ; wait in the food line to pick up food
-    if hour = 15 or hour = 22 [meetwithfriends] ; meet up with friends with remaining free time
+          if activitycategory = "Activity B" [
+            if hour = 1 [ ;reset counters to calculate probability of infection
+              set tcid 0
+              set tid 0
+              set hcid 0
+              set nyd 0
+              set nzd 0
+              set fm 0
+            ]
+            if hour < 4 or hour = 9 or hour = 13 or hour = 20 or hour = 23 [gohome] ; wake up at 6, eat breakfast at home at 9, eat lunch at home at 13, eat dinner at home at 20, go home to sleep at 23
+            if hour = 4 or hour = 14 or hour = 21 [gototoilet] ; shower for 2 hours after waking up, go to toilet for one hour after lunch and dinner
+            if hour = 6 or hour = 10 or hour = 17 [waitforfood] ; wait in the food line to pick up food
+            if hour = 15 or hour = 22 [
+              ifelse lockdown = true and obey? = true [gohome][meetwithfriends] ; meet up with friends rest of the day unless there is a lockdown
+            ]
+          ]
+        ]
+      ]
   ]
-
-  exposure
 end
 
 to meetwithfriends ; movement of agents to meet friends
   if member? activitylocation playareas = false [set activitylocation one-of playareas] ; one of the friends picks a place to meet up
-  ask Friend-neighbors [set activitylocation [activitylocation] of myself] ; connected friends meet up at selected location
+  ask Friend-neighbors with [obey? = false]  [set activitylocation [activitylocation] of myself] ; connected friends meet up at selected location but only if they don't obey lockdown
   move-to activitylocation
   set fm (count refugees-here with [infected? = TRUE]) ; counts how many friends are infected
-  set home? FALSE
 end
 
 to gototoilet
-  set activitylocation [patch-here] of min-one-of wash-n-sinks [distance myself] ;picks closest toilet to go to
+  set activitylocation closesttoilet ;picks closest toilet to go to
   move-to activitylocation
   set tcid (count refugees-here with [infected? = TRUE]) ; counts number of infected people in line at the toilet, following Tucker model
   set tid (count refugees-here) ; counts total number of people in the line at the toilet, following Tucker model
-  set home? FALSE
 end
 
 to waitforfood
   set activitylocation foodcenter ; waiting in line to get food at the food center
   move-to activitylocation
-  set home? FALSE
 end
 
 to gohome
   set activitylocation houselocation
   move-to activitylocation
   set hcid (count other refugees-here with [infected? = TRUE])
-  set home? TRUE
 end
 
 ; Contagion Module:
@@ -780,31 +798,31 @@ to exposure
 
   ask refugees with [status = "susceptible"][
     ; meetwithfriends infection following Tucker model logic for infection transmission while moving around
-    set pidm (1 - (1 - 0.017) ^ (fm)) ; uses P_M number from Tucker model python code (https://github.com/AIforGoodSimulator/agentbased-model-matlab/blob/master/tuckerabm.py)
+    set pidm (1 - (1 - (0.0085 * facemaskfactor)) ^ (fm)) ; uses pm high transmission number from Tucker model paper (https://www.medrxiv.org/content/10.1101/2020.07.07.20140996v2.full.pdf)
 
     ; toilet exposure following Tucker model binomial probability logic - can get infected by someone in front of line or back of line in toilet
     if tid != 0[
-      ; uses P_T number from Tucker model python code (https://github.com/AIforGoodSimulator/agentbased-model-matlab/blob/master/tuckerabm.py)
+      ; uses pt high transmission number from Tucker model paper (https://www.medrxiv.org/content/10.1101/2020.07.07.20140996v2.full.pdf)
       set pidt 1 - (
         ((1 - tcid / tid) ^ 2) +
-        2 * ((1 - tcid / tid) ^ 1) * ((tcid / tid) ^ 1) * ((1 - 0.099) ^ 1) +
-        ((tcid / tid) ^ 2) * ((1 - 0.099) ^ 2)
-      )
+        2 * ((1 - tcid / tid) ^ 1) * ((tcid / tid) ^ 1) * ((1 - 0.051) ^ 1) +
+        ((tcid / tid) ^ 2) * ((1 - (0.051 * facemaskfactor)) ^ 2)
+        )
     ]
 
     ; waitforfood infection following Tucker model binomial probability logic - can get infected by someone in front of line or back of line in food line
     ; does not make same assumptions as Tucker regarding standing in line for 3 out of 4 days - assumes that people line up for food every day
     if activitycategory = "Activity B" [
-      ; uses P_M number from Tucker model python code (https://github.com/AIforGoodSimulator/agentbased-model-matlab/blob/master/tuckerabm.py)
+      ; uses pf high transmission number from Tucker model paper (https://www.medrxiv.org/content/10.1101/2020.07.07.20140996v2.full.pdf)
       set pidf 1 - (
         ((1 - nyd / nzd) ^ 2) +
-        2 * ((1 - nyd / nzd) ^ 1) * ((nyd / nzd) ^ 1) * ((1 - 0.407) ^ 1) +
-        ((nyd / nzd) ^ 2) * ((1 - 0.407) ^ 2)
+        2 * ((1 - nyd / nzd) ^ 1) * ((nyd / nzd) ^ 1) * ((1 - 0.23) ^ 1) +
+        ((nyd / nzd) ^ 2) * ((1 - (0.23 * facemaskfactor)) ^ 2)
       )
     ]
 
     ; household infection following Tucker model logic - can get infected based on number of infected people at home
-    set pidh 1 - ((1 - 0.33) ^ hcid) ; uses P_H number from Tucker model python code (https://github.com/AIforGoodSimulator/agentbased-model-matlab/blob/master/tuckerabm.py)
+    set pidh 1 - ((1 - (0.18 * facemaskfactor)) ^ hcid) ; uses ph high transmission number from Tucker model paper (https://www.medrxiv.org/content/10.1101/2020.07.07.20140996v2.full.pdf)
 
     ; final infection calculation
     set pid 1 - (1 - pidt) * (1 - pidh) * (1 - pidf) * (1 - pidm) ; follows final calculation equation 1 from Tucker Model paper (https://www.medrxiv.org/content/10.1101/2020.07.07.20140996v2.full.pdf)
@@ -826,6 +844,7 @@ to infect-one ; kick-starts infection process by infecting one refugee at random
   ask one-of refugees with [status = "susceptible"] [
     set status "exposed"
     set infected? TRUE
+    set stayhome? FALSE
     set duration 0
     set exp-duration (random-normal 6.4 2.3)
     while [exp-duration < 0 ][set exp-duration (random-normal 6.4 2.3)]
@@ -840,7 +859,7 @@ to diseaseprogress ; follows disease progression described in Tucker Model paper
     ifelse duration / 24 >= (exp-duration / 2) ; second half of exposure duration the infected person is pre-symptomatic
     [ set status "pre-symptomatic"
       set infected? TRUE
-      set home? FALSE
+      set stayhome? FALSE
       set duration 0
     ]
     [ set duration duration + 1 ]
@@ -852,22 +871,22 @@ to diseaseprogress ; follows disease progression described in Tucker Model paper
         ifelse (random-float 1) < 0.836
         [ set status "1-asymptomatic"
           set duration 0
-          set home? FALSE
+          set stayhome? FALSE
         ]
         [ set status "symptomatic"
           set duration 0
-          set home? TRUE
+          set stayhome? TRUE
         ]
       ]
       [
         ifelse (random-float 1) < 0.178
         [ set status "1-asymptomatic"
           set duration 0
-          set home? FALSE
+          set stayhome? FALSE
         ]
         [ set status "symptomatic"
           set duration 0
-          set home? TRUE
+          set stayhome? TRUE
         ]
       ]
     ]
@@ -877,7 +896,7 @@ to diseaseprogress ; follows disease progression described in Tucker Model paper
     ifelse duration / 24 >= 5
     [ set status "2-asymptomatic"
       set duration 0
-      set home? FALSE
+      set stayhome? FALSE
     ]
     [ set duration duration + 1 ]
   ]
@@ -887,7 +906,7 @@ to diseaseprogress ; follows disease progression described in Tucker Model paper
     [
       set status "recovered"
       set infected? FALSE
-      set home? FALSE
+      set stayhome? FALSE
       set duration 0
     ]
     [
@@ -895,7 +914,7 @@ to diseaseprogress ; follows disease progression described in Tucker Model paper
       [
         set status "recovered"
         set infected? FALSE
-        set home? FALSE
+        set stayhome? FALSE
         set duration 0
       ]
     ]
@@ -907,11 +926,11 @@ to diseaseprogress ; follows disease progression described in Tucker Model paper
         ifelse (random-float 1) > 0.02055 ; average of 0.0101, 0.0209 from Verity et al. corrected for Tuite
         [ set status "mild"
           set duration 0
-          set home? TRUE
+          set stayhome? TRUE
         ]
         [ set status "severe"
           set duration 0
-          set home? TRUE
+          set stayhome? TRUE
         ]
       ]
       age = "adult"
@@ -919,11 +938,11 @@ to diseaseprogress ; follows disease progression described in Tucker Model paper
         ifelse (random-float 1) > 0.09865 ; average of 0.0410, 0.0642, 0.0721, 0.2173 from Verity et al. corrected for Tuite
         [ set status "mild"
           set duration 0
-          set home? TRUE
+          set stayhome? TRUE
         ]
         [ set status "severe"
           set duration 0
-          set home? TRUE
+          set stayhome? TRUE
         ]
       ]
       age = "elderly"
@@ -931,11 +950,11 @@ to diseaseprogress ; follows disease progression described in Tucker Model paper
         ifelse (random-float 1) > 0.5464 ; average of 0.2483, 0.6921, 0.6987 from Verity et al. corrected for Tuite
         [ set status "mild"
           set duration 0
-          set home? TRUE
+          set stayhome? TRUE
         ]
         [ set status "severe"
           set duration 0
-          set home? TRUE
+          set stayhome? TRUE
         ]
       ])
     ]
@@ -946,7 +965,7 @@ to diseaseprogress ; follows disease progression described in Tucker Model paper
     [
       set status "recovered"
       set infected? FALSE
-      set home? FALSE
+      set stayhome? FALSE
       set duration 0
     ]
     [
@@ -954,7 +973,7 @@ to diseaseprogress ; follows disease progression described in Tucker Model paper
       [
         set status "recovered"
         set infected? FALSE
-        set home? FALSE
+        set stayhome? FALSE
         set duration 0
       ]
     ]
@@ -964,7 +983,7 @@ to diseaseprogress ; follows disease progression described in Tucker Model paper
     [
       set status "recovered"
       set infected? FALSE
-      set home? FALSE
+      set stayhome? FALSE
       set duration 0
     ]
     [
@@ -972,7 +991,7 @@ to diseaseprogress ; follows disease progression described in Tucker Model paper
       [
         set status "recovered"
         set infected? FALSE
-        set home? FALSE
+        set stayhome? FALSE
         set duration 0
       ]
     ]
@@ -981,6 +1000,30 @@ end
 
 
 ; Interventions Module:
+
+to obey
+  ;adapted from ASSOCC model (https://www.notion.so/aiforgoodsimulator/v1-ConceptualModel-a67130a74bb64518a5834f5bdabb1f77#3f2e47d26bd14cc99b732cbb90784a8b)
+  let rand random-float 1
+  ifelse (ig2-ben + ig2-cft + ig2-sec + ig2-uni) / 400 - (ig2-ach + ig2-pow + ig2-hed + ig2-stm + ig2-sd) / 500 < rand [set obey? true][set obey? false]
+end
+
+to intervene
+  ask refugees [
+    if hour = 0 [obey] ;every day, refugees decide to obey or disobey the interventions with a certain probability
+    ifelse facemasks = true and obey? = true [set facemaskfactor 0.32][set facemaskfactor 1] ; uses facemask factor described in Tucker Model paper (https://www.medrxiv.org/content/10.1101/2020.07.07.20140996v2.full.pdf)
+    if isolation = true [ ;if isolation is turned on, then refugees that show symptoms and their entire households are isolated to the isolation center in purple
+      let rand random-float 1
+      if isolation_probability < rand and (status = "symptomatic" or status = "mild" or status = "severe") [
+        set isolated? true
+        ask refugees with [houselocation = [houselocation] of myself] [set isolated? true]
+      ]
+      if isolated? = true and (count refugees with [status = "recovered" and houselocation = [houselocation] of myself] = count refugees with [houselocation = [houselocation] of myself]) [ ;once the refugees' households have recovered, they are able to return to the camp
+        set isolated? false
+        ask refugees with [houselocation = [houselocation] of myself] [set isolated? false]
+      ]
+    ]
+  ]
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
 47
@@ -1003,8 +1046,8 @@ GRAPHICS-WINDOW
 500
 -500
 500
-1
-1
+0
+0
 1
 ticks
 30.0
@@ -1089,10 +1132,10 @@ NIL
 1
 
 BUTTON
-1116
-179
-1213
+1120
 212
+1217
+245
 NIL
 infect-one
 NIL
@@ -1123,10 +1166,10 @@ NIL
 1
 
 MONITOR
-1092
-269
-1201
-315
+1096
+438
+1205
+483
 susceptible
 count refugees with [status = \"susceptible\"]
 1
@@ -1134,10 +1177,10 @@ count refugees with [status = \"susceptible\"]
 11
 
 MONITOR
-1090
-327
-1202
-373
+1093
+495
+1205
+540
 exposed
 count refugees with [status = \"exposed\"]
 17
@@ -1145,10 +1188,10 @@ count refugees with [status = \"exposed\"]
 11
 
 MONITOR
-1092
-383
-1198
-428
+1096
+552
+1202
+597
 pre-symptomatic
 count refugees with [status = \"pre-symptomatic\"]
 17
@@ -1156,10 +1199,10 @@ count refugees with [status = \"pre-symptomatic\"]
 11
 
 MONITOR
-1092
-440
-1202
-486
+1096
+608
+1206
+653
 1-asymptomatic
 count refugees with [status = \"1-asymptomatic\"]
 17
@@ -1167,10 +1210,10 @@ count refugees with [status = \"1-asymptomatic\"]
 11
 
 MONITOR
-1093
-499
-1203
-545
+1098
+668
+1208
+713
 2-asymptomatic
 count refugees with [status = \"2-asymptomatic\"]
 17
@@ -1178,10 +1221,10 @@ count refugees with [status = \"2-asymptomatic\"]
 11
 
 MONITOR
-1095
-563
-1207
-609
+1099
+732
+1211
+777
 symptomatic
 count refugees with [status = \"symptomatic\"]
 17
@@ -1189,10 +1232,10 @@ count refugees with [status = \"symptomatic\"]
 11
 
 MONITOR
-1095
-627
-1207
-673
+1099
+795
+1211
+840
 mild
 count refugees with [status = \"mild\"]
 17
@@ -1200,10 +1243,10 @@ count refugees with [status = \"mild\"]
 11
 
 MONITOR
-1095
-684
-1207
-730
+1099
+852
+1211
+897
 severe
 count refugees with [status = \"severe\"]
 17
@@ -1211,10 +1254,10 @@ count refugees with [status = \"severe\"]
 11
 
 MONITOR
-1097
-747
-1210
-793
+1100
+915
+1213
+960
 recovered
 count refugees with [status = \"recovered\"]
 17
@@ -1222,10 +1265,10 @@ count refugees with [status = \"recovered\"]
 11
 
 PLOT
-1240
-272
-1830
-794
+1243
+440
+1833
+962
 Infection Progression
 NIL
 NIL
@@ -1251,9 +1294,99 @@ MONITOR
 1199
 93
 1257
-139
+138
 NIL
 day
+17
+1
+11
+
+TEXTBOX
+1120
+190
+1220
+216
+Infections
+11
+0.0
+1
+
+TEXTBOX
+1280
+190
+1359
+216
+Interventions
+11
+0.0
+1
+
+SWITCH
+1276
+212
+1385
+245
+facemasks
+facemasks
+1
+1
+-1000
+
+SWITCH
+1276
+258
+1386
+291
+lockdown
+lockdown
+1
+1
+-1000
+
+MONITOR
+1409
+210
+1548
+255
+# disobeying refugees
+count refugees with [obey? = false and stayhome? = false]
+17
+1
+11
+
+SWITCH
+1278
+300
+1387
+333
+isolation
+isolation
+0
+1
+-1000
+
+SLIDER
+1402
+300
+1575
+333
+isolation_probability
+isolation_probability
+0
+1
+0.5
+.25
+1
+NIL
+HORIZONTAL
+
+MONITOR
+1569
+210
+1691
+255
+# isolated refugees
+count refugees with [isolated? = true]
 17
 1
 11
