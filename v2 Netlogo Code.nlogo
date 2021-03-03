@@ -54,20 +54,16 @@ refugees-own [ ; various characteristics of refugees
   ig2-cft
   ig2-sec
   ig2-uni
-  tcid ; these are parameters borrowed from the Tucker model to calculate infection dynnamics per refugee
-  tid
-  infected?
-  status
-  fm
-  pid
+  tcid ; infected people at toilet
+  tid ; total people at toilet
+  hcid ; infected people at home
+  fm ; friends who are infected
+  pid ; probability of getting infected
+  status ; infection stage
+  infected? ; whether refugee is infectious
   stayhome? ;whether refugees should stay home because of symptoms
   exp-duration
   duration
-  pidt
-  hcid
-  pidh
-  pidm
-  pidf
   obey? ;whether refugee will obey the rules and follow interventions - based on values
   facemaskfactor ;adjusts probability of infection if facemasks are made available
   isolated? ;whether the refugee will be isolated if they show symptoms
@@ -177,9 +173,10 @@ end
 to go
   set hour floor (ticks mod 24) ;the ticks are hours, so this translates it into hour of day
   set day floor (ticks / 24) + 1 ;the ticks are hours, so this translates it into days
+  set nyd (count refugees with [status = "pre-symptomatic" or status = "1-asymptomatic" or status = "2-asymptomatic"]) ;number of infected without symptoms
+  set nzd (count refugees with [status != "symptomatic" or status != "mild" or status != "severe"]) ;number of total without symptoms
   intervene ; determines refugee's probability of obeying intervention and adjusts activities and probabilities if they obey
   activity ; abstract set of activities for agents
-  exposure ; exposes infection to susceptible individuals
   diseaseprogress ; moves through stages of infection for those who are exposed
   tick
 end
@@ -596,7 +593,7 @@ to setculture ; uses data from Hofstede (https://www.hofstede-insights.com/produ
   )
 end
 
-to setvalues ; follows approach from ASSOCC model (https://www.notion.so/aiforgoodsimulator/v1-ConceptualModel-a67130a74bb64518a5834f5bdabb1f77#3f2e47d26bd14cc99b732cbb90784a8b)
+to setvalues ; follows approach from ASSOCC model (https://doi.org/10.1007/s11023-020-09527-6)
   set ach (idv + mas) / 2
   set pow (idv + uai + mas) / 3
   set hed (idv + ivr) / 2
@@ -671,7 +668,7 @@ to createpeople ; creates refugees in each tent based on UN data, Moria data, an
     setnationality
     ask patch-here [
       sprout-refugees numberofunaccompaniedyouth / count sec-centroids [ sproutsettings ]
-      ask refugees-here [set age "youth" setsex set activitycategory "Activity A"]
+      ask refugees-here [set age "youth" setsex set activitycategory "Activity A"]  ; assumes that unaccompanied children don't need to stand in food lines and are provided food by the camp staff
     ]
   ]
   ask refugees [ ; inital infection settings
@@ -693,7 +690,7 @@ to sproutsettings ; sets culture, values, nationality, household and shape for r
 end
 
 ;Network Module:
-to-report value-euclidean-distance [other-agent] ; follows approach from ASSOCC model, see Notion (https://www.notion.so/aiforgoodsimulator/v1-ConceptualModel-a67130a74bb64518a5834f5bdabb1f77#830eb364fce54e729f1bf7d570911746)
+to-report value-euclidean-distance [other-agent] ; follows approach from ASSOCC model (https://doi.org/10.1007/s11023-020-09527-6)
   report sqrt sum (list
     ((ig2-hed - [ig2-hed] of other-agent) ^ 2)
     ((ig2-stm - [ig2-stm] of other-agent) ^ 2)
@@ -724,7 +721,7 @@ end
 
 to activity ; creates abstract activities for agents to follow - basically 4 main activities - being home, going to the toilet / shower, waiting in line, meeting with friends
   ask refugees [
-    ifelse isolated? = TRUE [move-to isolationcenter]
+    ifelse isolated? = TRUE and count turtles-on isolationcenter < isolation_capacity [move-to isolationcenter]
       [
         ifelse stayhome? = TRUE [gohome]
         [
@@ -733,8 +730,6 @@ to activity ; creates abstract activities for agents to follow - basically 4 mai
               set tcid 0
               set tid 0
               set hcid 0
-              set nyd 0
-              set nzd 0
               set fm 0
             ]
             if hour < 6 or hour = 9 or hour = 13 or hour = 20 or hour = 23 [gohome] ; wake up at 6, eat breakfast at home at 9, eat lunch at home at 13, eat dinner at home at 20, go home to sleep at 23
@@ -749,8 +744,6 @@ to activity ; creates abstract activities for agents to follow - basically 4 mai
               set tcid 0
               set tid 0
               set hcid 0
-              set nyd 0
-              set nzd 0
               set fm 0
             ]
             if hour < 4 or hour = 9 or hour = 13 or hour = 20 or hour = 23 [gohome] ; wake up at 6, eat breakfast at home at 9, eat lunch at home at 13, eat dinner at home at 20, go home to sleep at 23
@@ -769,74 +762,57 @@ to meetwithfriends ; movement of agents to meet friends
   if member? activitylocation playareas = false [set activitylocation one-of playareas] ; one of the friends picks a place to meet up
   ask Friend-neighbors with [obey? = false]  [set activitylocation [activitylocation] of myself] ; connected friends meet up at selected location but only if they don't obey lockdown
   move-to activitylocation
-  set fm (count refugees-here with [infected? = TRUE]) ; counts how many friends are infected
+  exposefriends ; exposure when meeting with friends
 end
 
 to gototoilet
   set activitylocation closesttoilet ;picks closest toilet to go to
   move-to activitylocation
-  set tcid (count refugees-here with [infected? = TRUE]) ; counts number of infected people in line at the toilet, following Tucker model
-  set tid (count refugees-here) ; counts total number of people in the line at the toilet, following Tucker model
+  exposetoilet ; exposure when going to toilet
+
 end
 
 to waitforfood
   set activitylocation foodcenter ; waiting in line to get food at the food center
   move-to activitylocation
+  exposefood ; exposure when in food line
 end
 
 to gohome
   set activitylocation houselocation
   move-to activitylocation
-  set hcid (count other refugees-here with [infected? = TRUE])
+  exposehome ; exposure when staying at home
 end
 
 ; Contagion Module:
-to exposure
-  ; follows Tucker model logic but on an hourly basis instead of on a daily basis, parameters from Tucker Model python code (https://github.com/AIforGoodSimulator/agentbased-model-matlab/blob/master/tuckerabm.py)
-  set nyd (count refugees with [status = "pre-symptomatic" or status = "1-asymptomatic" or status = "2-asymptomatic"]) ;number of infected without symptoms
-  set nzd (count refugees with [status != "symptomatic" or status != "mild" or status != "severe"]) ;number of total without symptoms
+to exposefriends
+  set fm (count refugees-here with [infected? = TRUE]) ; counts how many friends are infected
+  set pid (1 - (1 - (prob_friends * facemaskfactor)) ^ (fm)) ; friend infection following Gilman et al. 2020 model logic for moving around camp
+end
 
-  ask refugees with [status = "susceptible"][
-    ; meetwithfriends infection following Tucker model logic for infection transmission while moving around
-    set pidm (1 - (1 - (0.0085 * facemaskfactor)) ^ (fm)) ; uses pm high transmission number from Tucker model paper (https://www.medrxiv.org/content/10.1101/2020.07.07.20140996v2.full.pdf)
+to exposetoilet
+  set tcid (count refugees-here with [infected? = TRUE]) ; counts number of infected people in line at the toilet, following Gilman et al. 2020 model
+  set tid (count refugees-here) ; counts total number of people in the line at the toilet, following Gilman et al. 2020 model
+  if tid != 0 [ ; toilet exposure following Gilman et al. 2020 model binomial probability logic - can get infected by someone in front of line or back of line in toilet
+    set pid 1 - (
+      ((1 - tcid / tid) ^ 2) +
+      2 * ((1 - tcid / tid) ^ 1) * ((tcid / tid) ^ 1) * ((1 - 0.051) ^ 1) +
+      ((tcid / tid) ^ 2) * ((1 - (prob_toilet * facemaskfactor)) ^ 2)
+    )
+  ]
+end
 
-    ; toilet exposure following Tucker model binomial probability logic - can get infected by someone in front of line or back of line in toilet
-    if tid != 0[
-      ; uses pt high transmission number from Tucker model paper (https://www.medrxiv.org/content/10.1101/2020.07.07.20140996v2.full.pdf)
-      set pidt 1 - (
-        ((1 - tcid / tid) ^ 2) +
-        2 * ((1 - tcid / tid) ^ 1) * ((tcid / tid) ^ 1) * ((1 - 0.051) ^ 1) +
-        ((tcid / tid) ^ 2) * ((1 - (0.051 * facemaskfactor)) ^ 2)
-        )
-    ]
-
-    ; waitforfood infection following Tucker model binomial probability logic - can get infected by someone in front of line or back of line in food line
-    ; does not make same assumptions as Tucker regarding standing in line for 3 out of 4 days - assumes that people line up for food every day
-    if activitycategory = "Activity B" [
-      ; uses pf high transmission number from Tucker model paper (https://www.medrxiv.org/content/10.1101/2020.07.07.20140996v2.full.pdf)
-      set pidf 1 - (
+to exposefood ; following Gilman et al. 2020 model binomial probability logic - can get infected by someone in front of line or back of line in food line
+  set pid 1 - (
         ((1 - nyd / nzd) ^ 2) +
         2 * ((1 - nyd / nzd) ^ 1) * ((nyd / nzd) ^ 1) * ((1 - 0.23) ^ 1) +
-        ((nyd / nzd) ^ 2) * ((1 - (0.23 * facemaskfactor)) ^ 2)
-      )
-    ]
+        ((nyd / nzd) ^ 2) * ((1 - (prob_food * facemaskfactor)) ^ 2)
+  )
+end
 
-    ; household infection following Tucker model logic - can get infected based on number of infected people at home
-    set pidh 1 - ((1 - (0.18 * facemaskfactor)) ^ hcid) ; uses ph high transmission number from Tucker model paper (https://www.medrxiv.org/content/10.1101/2020.07.07.20140996v2.full.pdf)
-
-    ; final infection calculation
-    set pid 1 - (1 - pidt) * (1 - pidh) * (1 - pidf) * (1 - pidm) ; follows final calculation equation 1 from Tucker Model paper (https://www.medrxiv.org/content/10.1101/2020.07.07.20140996v2.full.pdf)
-
-    ; infection using probability
-    let pp random-float 1
-    if pp <= pid
-    [ set status "exposed"
-      set infected? TRUE
-      set duration 0
-      set exp-duration (random-normal 6.4 2.3) ; exposure duration described in Tucker Model paper (https://www.medrxiv.org/content/10.1101/2020.07.07.20140996v2.full.pdf)
-      while [exp-duration < 0] [set exp-duration (random-normal 6.4 2.3)]
-    ]
-  ]
+to exposehome
+  set hcid (count other refugees-here with [infected? = TRUE])
+  set pid 1 - ((1 - (prob_home * facemaskfactor)) ^ hcid) ; household infection following Gilman et al. 2020 model logic - can get infected based on number of infected people at home
 end
 
 
@@ -853,8 +829,19 @@ end
 
 
 
-to diseaseprogress ; follows disease progression described in Tucker Model paper (https://www.medrxiv.org/content/10.1101/2020.07.07.20140996v2.full.pdf)
+to diseaseprogress ; follows disease progression described in Gilman et al. 2020 Model paper (https://www.medrxiv.org/content/10.1101/2020.07.07.20140996v2.full.pdf)
   ; duration is in hours, while exposure duration is in days and other disease progression is in days
+  ask refugees with [status = "susceptible"][
+    let pp random-float 1
+    if pp <= pid
+    [ set status "exposed"
+      set infected? TRUE
+      set duration 0
+      set exp-duration (random-normal 6.4 2.3) ; exposure duration described in Gilman et al. 2020 Model paper (https://www.medrxiv.org/content/10.1101/2020.07.07.20140996v2.full.pdf)
+      while [exp-duration < 0] [set exp-duration (random-normal 6.4 2.3)]
+    ]
+  ]
+
   ask refugees with [status = "exposed"][
     ifelse duration / 24 >= (exp-duration / 2) ; second half of exposure duration the infected person is pre-symptomatic
     [ set status "pre-symptomatic"
@@ -920,7 +907,7 @@ to diseaseprogress ; follows disease progression described in Tucker Model paper
     ]
   ]
   ask refugees with [status = "symptomatic"][
-    ifelse duration / 24 >= 5 ; after 5 days in symptomatic they develop a mild or sever case with a certain probability based on age group used averages from buckets in Tucker Model ABM (https://github.com/AIforGoodSimulator/agentbased-model-matlab/blob/master/abm.py)
+    ifelse duration / 24 >= 5 ; after 5 days in symptomatic they develop a mild or sever case with a certain probability based on age group used averages from buckets in Gilman et al. 2020 Model ABM (https://github.com/AIforGoodSimulator/agentbased-model-matlab/blob/master/abm.py)
     [ (ifelse age = "youth"
       [
         ifelse (random-float 1) > 0.02055 ; average of 0.0101, 0.0209 from Verity et al. corrected for Tuite
@@ -1002,7 +989,7 @@ end
 ; Interventions Module:
 
 to obey
-  ;adapted from ASSOCC model (https://www.notion.so/aiforgoodsimulator/v1-ConceptualModel-a67130a74bb64518a5834f5bdabb1f77#3f2e47d26bd14cc99b732cbb90784a8b)
+  ;adapted from ASSOCC model (https://doi.org/10.1007/s11023-020-09527-6)
   let rand random-float 1
   ifelse (ig2-ben + ig2-cft + ig2-sec + ig2-uni) / 400 - (ig2-ach + ig2-pow + ig2-hed + ig2-stm + ig2-sd) / 500 < rand [set obey? true][set obey? false]
 end
@@ -1010,16 +997,14 @@ end
 to intervene
   ask refugees [
     if hour = 0 [obey] ;every day, refugees decide to obey or disobey the interventions with a certain probability
-    ifelse facemasks = true and obey? = true [set facemaskfactor 0.32][set facemaskfactor 1] ; uses facemask factor described in Tucker Model paper (https://www.medrxiv.org/content/10.1101/2020.07.07.20140996v2.full.pdf)
+    ifelse facemasks = true and obey? = true [set facemaskfactor 0.32][set facemaskfactor 1] ; uses facemask factor described in Gilman et al. 2020 Model paper (https://www.medrxiv.org/content/10.1101/2020.07.07.20140996v2.full.pdf)
     if isolation = true [ ;if isolation is turned on, then refugees that show symptoms and their entire households are isolated to the isolation center in purple
       let rand random-float 1
       if isolation_probability < rand and (status = "symptomatic" or status = "mild" or status = "severe") [
         set isolated? true
-        ask refugees with [houselocation = [houselocation] of myself] [set isolated? true]
       ]
       if isolated? = true and (count refugees with [status = "recovered" and houselocation = [houselocation] of myself] = count refugees with [houselocation = [houselocation] of myself]) [ ;once the refugees' households have recovered, they are able to return to the camp
         set isolated? false
-        ask refugees with [houselocation = [houselocation] of myself] [set isolated? false]
       ]
     ]
   ]
@@ -1053,10 +1038,10 @@ ticks
 30.0
 
 BUTTON
-1112
-28
-1237
-63
+1080
+106
+1205
+141
 setup new world
 setup\n
 NIL
@@ -1070,10 +1055,10 @@ NIL
 1
 
 BUTTON
-1273
-98
-1337
-132
+1239
+156
+1303
+190
 NIL
 go
 T
@@ -1087,10 +1072,10 @@ NIL
 0
 
 MONITOR
-1118
-93
-1182
-138
+1083
+152
+1147
+197
 NIL
 hour
 17
@@ -1098,10 +1083,10 @@ hour
 11
 
 BUTTON
-1263
-29
-1366
-64
+1232
+108
+1335
+143
 export world
 export
 NIL
@@ -1115,10 +1100,10 @@ NIL
 1
 
 BUTTON
-1390
-28
-1490
-63
+1356
+106
+1456
+141
 import world
 import
 NIL
@@ -1132,10 +1117,10 @@ NIL
 1
 
 BUTTON
-1120
-212
-1217
-245
+1080
+238
+1177
+271
 NIL
 infect-one
 NIL
@@ -1149,10 +1134,10 @@ NIL
 1
 
 BUTTON
-1353
-99
-1440
-132
+1319
+158
+1406
+191
 go-once
 go
 NIL
@@ -1166,10 +1151,10 @@ NIL
 1
 
 MONITOR
-1096
-438
-1205
+1082
 483
+1191
+528
 susceptible
 count refugees with [status = \"susceptible\"]
 1
@@ -1177,10 +1162,10 @@ count refugees with [status = \"susceptible\"]
 11
 
 MONITOR
-1093
-495
-1205
-540
+1082
+532
+1192
+577
 exposed
 count refugees with [status = \"exposed\"]
 17
@@ -1188,10 +1173,10 @@ count refugees with [status = \"exposed\"]
 11
 
 MONITOR
-1096
-552
-1202
-597
+1082
+580
+1192
+625
 pre-symptomatic
 count refugees with [status = \"pre-symptomatic\"]
 17
@@ -1199,10 +1184,10 @@ count refugees with [status = \"pre-symptomatic\"]
 11
 
 MONITOR
-1096
-608
-1206
-653
+1082
+629
+1192
+674
 1-asymptomatic
 count refugees with [status = \"1-asymptomatic\"]
 17
@@ -1210,10 +1195,10 @@ count refugees with [status = \"1-asymptomatic\"]
 11
 
 MONITOR
-1098
-668
-1208
-713
+1082
+678
+1192
+723
 2-asymptomatic
 count refugees with [status = \"2-asymptomatic\"]
 17
@@ -1221,10 +1206,10 @@ count refugees with [status = \"2-asymptomatic\"]
 11
 
 MONITOR
-1099
-732
-1211
-777
+1082
+726
+1192
+771
 symptomatic
 count refugees with [status = \"symptomatic\"]
 17
@@ -1232,10 +1217,10 @@ count refugees with [status = \"symptomatic\"]
 11
 
 MONITOR
-1099
-795
-1211
-840
+1082
+775
+1192
+820
 mild
 count refugees with [status = \"mild\"]
 17
@@ -1243,10 +1228,10 @@ count refugees with [status = \"mild\"]
 11
 
 MONITOR
-1099
-852
-1211
-897
+1082
+823
+1192
+868
 severe
 count refugees with [status = \"severe\"]
 17
@@ -1254,10 +1239,10 @@ count refugees with [status = \"severe\"]
 11
 
 MONITOR
-1100
-915
-1213
-960
+1082
+872
+1192
+917
 recovered
 count refugees with [status = \"recovered\"]
 17
@@ -1265,10 +1250,10 @@ count refugees with [status = \"recovered\"]
 11
 
 PLOT
-1243
-440
-1833
-962
+1229
+485
+1819
+918
 Infection Progression
 NIL
 NIL
@@ -1291,10 +1276,10 @@ PENS
 "Recovered" 1.0 0 -14439633 true "" "plot count refugees with [status = \"recovered\"]"
 
 MONITOR
-1199
-93
-1257
-138
+1163
+152
+1221
+197
 NIL
 day
 17
@@ -1302,30 +1287,30 @@ day
 11
 
 TEXTBOX
-1120
-190
-1220
-216
+1080
+215
+1180
+241
 Infections
 11
 0.0
 1
 
 TEXTBOX
-1280
-190
-1359
-216
+1366
+215
+1445
+241
 Interventions
 11
 0.0
 1
 
 SWITCH
-1276
-212
-1385
-245
+1363
+238
+1472
+271
 facemasks
 facemasks
 1
@@ -1333,10 +1318,10 @@ facemasks
 -1000
 
 SWITCH
-1276
-258
-1386
-291
+1363
+283
+1473
+316
 lockdown
 lockdown
 1
@@ -1344,10 +1329,10 @@ lockdown
 -1000
 
 MONITOR
-1409
-210
-1548
-255
+1496
+235
+1635
+280
 # disobeying refugees
 count refugees with [obey? = false and stayhome? = false]
 17
@@ -1355,21 +1340,21 @@ count refugees with [obey? = false and stayhome? = false]
 11
 
 SWITCH
-1278
-300
-1387
-333
+1365
+325
+1474
+358
 isolation
 isolation
-0
+1
 1
 -1000
 
 SLIDER
-1402
-300
-1575
-333
+1489
+325
+1662
+358
 isolation_probability
 isolation_probability
 0
@@ -1381,52 +1366,164 @@ NIL
 HORIZONTAL
 
 MONITOR
-1569
-210
-1691
-255
+1673
+363
+1788
+408
 # isolated refugees
-count refugees with [isolated? = true]
+count turtles-on isolationcenter
 17
 1
 11
 
+INPUTBOX
+1080
+313
+1186
+381
+prob_home
+0.0397
+1
+0
+Number
+
+INPUTBOX
+1198
+313
+1306
+381
+prob_toilet
+0.0067
+1
+0
+Number
+
+INPUTBOX
+1080
+385
+1186
+453
+prob_friends
+0.006
+1
+0
+Number
+
+INPUTBOX
+1198
+385
+1307
+453
+prob_food
+0.0397
+1
+0
+Number
+
+INPUTBOX
+1489
+363
+1665
+431
+isolation_capacity
+200.0
+1
+0
+Number
+
+TEXTBOX
+1079
+279
+1294
+308
+Transmission probabilities\n(from Gilman et al. 2020)
+11
+0.0
+1
+
+TEXTBOX
+1079
+15
+1818
+101
+NOTE In order for the model to run, it is necessary to save the Moria camp GIS files in the same folder as the Netlogo file. You can download the GIS files from the Github here: https://github.com/AIforGoodSimulator/agentbased-model-Netlogo/blob/master/gismoria.zip
+13
+15.0
+1
+
 @#$#@#$#@
 ## WHAT IS IT?
 
-(a general understanding of what the model is trying to show or explain)
+The Netlogo model is a conceptualization of the Moria refugee camp, capturing the household demographics of refugees in the camp, a theoretical friendship network based on values, and an abstraction of their daily activities. The model then simulates how Covid-19 could spread through the camp if one refugee is exposed to the virus, utilizing transmission probabilities and the stages of disease progression of Covid-19 from susceptible to exposed to asymptomatic / symptomatic to mild / severe to recovered from literature (Gilman et al., 2020). The model also incorporates various interventions - PPE, lockdown, isolation of symptomatic refugees - to analyze how they could mitigate the spread of the virus through the camp.
 
 ## HOW IT WORKS
 
-(what rules the agents use to create the overall behavior of the model)
+The model is composed of a variety of modules:
+
+1. **Physical Layout Module** - utilizes GIS files of the Moria camp ([https://github.com/AIforGoodSimulator/agentbased-model-Netlogo/blob/master/gismoria.zip](https://github.com/AIforGoodSimulator/agentbased-model-Netlogo/blob/master/gismoria.zip)) to reconstruct a physical representation of the camp and its various buildings.
+2. **Agent Module** - using demographic data from the Moria camp in conjunction with data from the United Nations ([UN, 2017](https://www.un.org/en/development/desa/population/publications/pdf/ageing/household_size_and_composition_around_the_world_2017_data_booklet.pdf)), the model creates refugees with various demographic information - age (youth, adult, elderly), sex, household composition (single individual, unaccompanied children, father only, mother only, father + mother, kids, elderly), nationality, and cultural dimensions by country from the Hofstede Insights website ([https://www.hofstede-insights.com/product/compare-countries/](https://www.hofstede-insights.com/product/compare-countries/)), which were then converted into cultural values following the ASSOCC model ([Dignum et al., 2020](https://doi.org/10.1007/s11023-020-09527-6)).
+3. **Network Module** - using the cultural values data, theoretical friendship networks were created where each refugee has up to 3 friends outside of their household who are close to their cultural value parameters, adapting the approach taken in the ASSOCC model ([Dignum et al., 2020](https://doi.org/10.1007/s11023-020-09527-6)).
+4. **Activity Module** - the model assumes an abstract daily activity for the refugees following one of two activity categories
+    - Activity category A - kids and elderly in households + unaccompanied youth
+    06:00 - Wake up, go to the toilet to shower and get ready
+    08:00 - meet with friends
+    09:00 - go home and eat breakfast brought to them by family (or camp staff if they are unaccompanied youth)
+    11:00 - meet with friends
+    13:00 - go home and eat lunch brought to them by family (or camp staff if they are unaccompanied youth)
+    14:00 - go to the toilet after lunch
+    15:00 - meet with friends
+    20:00 - go home and eat dinner brought to them by family (or camp staff if they are unaccompanied youth)
+    21:00 - go to the toilet after dinner
+    22:00 - meet with friends
+    23:00 - go home to sleep
+    - Activity category B - single adults, elderly who live by themselves, and heads of households
+    04:00 - Wake up go to the toilet to shower and get ready
+    06:00 - wait in the food line for breakfast
+    09:00 - go home and eat breakfast with family
+    10:00 - wait in food line for lunch
+    13:00 - go home and eat lunch with family
+    14:00 - go to the toilet after lunch
+    15:00 - meet with friends
+    17:00 - wait in food line for dinner
+    20:00 - go home and eat dinner with family
+    21:00 - go to the toilet after dinner
+    22:00 - meet with friends
+    23:00 - go home to sleep
+5. **Contagion** **Module** - the model includes a button to infect a single refugee with Covid-19, which then spreads to other refugees with certain transmission probabilities based on whether the refugees are meeting with friends, going to the toilet, waiting in the food line, or staying at home, following the approach in [Gilman et al., 2020](https://www.medrxiv.org/content/10.1101/2020.07.07.20140996v2.full.pdf). These transmission probabilities can be changed in the inputs section of the model to test alternate values.
+Once exposed to the virus, the disease progresses through various stages - susceptible to exposed to 1- asymptomatic, 2 - asymptomatic to symptomatic to mild or severe to recovered. Each stage has a certain duration and a certain probability associated with the progression, following the approach in [Gilman et al., 2020](https://www.medrxiv.org/content/10.1101/2020.07.07.20140996v2.full.pdf). 
+6. **Interventions Module** - lastly, the model incorporates a series of interventions to analyze how the spread of the virus can be mitigated - facemasks, which reduce the probability of transmission, lockdown which restricts refugees from meeting with friends, and isolation which removes symptomatic refugees to a separate location outside of the camp, following the approach in [Gilman et al., 2020](https://www.medrxiv.org/content/10.1101/2020.07.07.20140996v2.full.pdf).
+For the isolation intervention, the model allows the probability of the camp to identify and isolate symptomatic refugees to be changed, as well as the capacity of the isolation location to be specified. If the isolation center is full, then the refugees stay at home in the camp.
+In addition, following the approach in the ASSOCC model ([Dignum et al., 2020](https://doi.org/10.1007/s11023-020-09527-6)), a certain percentage of refugees will circumvent and disobey the rules based on their cultural values. This means that they will refuse to wear facemasks and still meet with friends under a lockdown.
 
 ## HOW TO USE IT
 
-(how to use the model, including a description of each of the items in the Interface tab)
+**NOTE** In order for the model to run, it is necessary to save the Moria camp GIS files in the same folder as the Netlogo file. You can download the GIS files from the Github here: https://github.com/AIforGoodSimulator/agentbased-model-Netlogo/blob/master/gismoria.zip
 
-## THINGS TO NOTICE
+When initializing the model, there are some parameters that are randomized, so no two initializations will be the same. The initialization process takes some time, so the model has the ability to EXPORT the world and IMPORT the world in order to reduce the initialization time and also test various changes in parameters with a single initialization.
 
-(suggested things for the user to notice while running the model)
+Infection parameters that can be changed include the transmission probabilities at home, at the toilet, in food lines, and when meeting with friends
 
-## THINGS TO TRY
+Interventions that can be tested include the distribution of facemasks, the lockdown of the camp, isolation of symptomatic individuals with a specified probability and a specified capacity of the isolation center
 
-(suggested things for the user to try to do (move sliders, switches, etc.) with the model)
 
-## EXTENDING THE MODEL
-
-(suggested things to add or change in the Code tab to make the model more complicated, detailed, accurate, etc.)
-
-## NETLOGO FEATURES
-
-(interesting or unusual features of NetLogo that the model uses, particularly in the Code tab; or where workarounds were needed for missing features)
-
-## RELATED MODELS
-
-(models in the NetLogo Models Library and elsewhere which are of related interest)
 
 ## CREDITS AND REFERENCES
 
-(a reference to the model's URL on the web if it has one, as well as any other necessary credits, citations, and links)
+Model Github: https://github.com/AIforGoodSimulator/agentbased-model-Netlogo
+
+Dignum, F., Dignum, V., Davidsson, P. et al. Analysing the Combined Health, Social and Economic Impacts of the Corovanvirus Pandemic Using Agent-Based Social Simulation. Minds & Machines 30, 177–194 (2020). https://doi.org/10.1007/s11023-020-09527-6
+
+Gilman RT, Mahroof-Sha S, Harkensee C, et al. Modelling interventions to control COVID-19
+outbreaks in a refugee camp. BMJ Glob Health. 2020;5:e003727.
+
+Hofstede Insights. https://www.hofstede-insights.com/product/compare-countries/. Accessed 2020.
+
+Tuite AR, Fisman DN, Greer AL. Mathematical modelling of COVID-19 transmission and mitigation strategies in the population of Ontario, Canada. CMAJ. 2020; 192(19): E497-E505.
+
+Verity R, Okell LC, Dorigatti I, Winskill P, Whittaker C, Imai N, et al. Estimates of the severity of coronavirus disease 2019: a model-based analysis. Lancet Infect Dis. 2020; 60(6): P669-77.
+
+United Nations. Household Size and Composition
+Around the World 2017. https://www.un.org/en/development/desa/population/publications/pdf/ageing/household_size_and_composition_around_the_world_2017_data_booklet.pdf
 @#$#@#$#@
 default
 true
