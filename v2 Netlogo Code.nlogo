@@ -796,7 +796,7 @@ to exposetoilet
   if tid != 0 [ ; toilet exposure following Gilman et al. 2020 model binomial probability logic - can get infected by someone in front of line or back of line in toilet
     set pid 1 - (
       ((1 - tcid / tid) ^ 2) +
-      2 * ((1 - tcid / tid) ^ 1) * ((tcid / tid) ^ 1) * ((1 - 0.051) ^ 1) +
+      2 * ((1 - tcid / tid) ^ 1) * ((tcid / tid) ^ 1) * ((1 - prob_toilet * facemaskfactor) ^ 1) +
       ((tcid / tid) ^ 2) * ((1 - (prob_toilet * facemaskfactor)) ^ 2)
     )
   ]
@@ -805,7 +805,7 @@ end
 to exposefood ; following Gilman et al. 2020 model binomial probability logic - can get infected by someone in front of line or back of line in food line
   set pid 1 - (
         ((1 - nyd / nzd) ^ 2) +
-        2 * ((1 - nyd / nzd) ^ 1) * ((nyd / nzd) ^ 1) * ((1 - 0.23) ^ 1) +
+        2 * ((1 - nyd / nzd) ^ 1) * ((nyd / nzd) ^ 1) * ((1 - prob_food * facemaskfactor) ^ 1) +
         ((nyd / nzd) ^ 2) * ((1 - (prob_food * facemaskfactor)) ^ 2)
   )
 end
