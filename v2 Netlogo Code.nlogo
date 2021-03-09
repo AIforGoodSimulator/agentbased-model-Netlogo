@@ -1463,7 +1463,7 @@ The model is composed of a variety of modules:
 1. **Physical Layout Module** - utilizes GIS files of the Moria camp ([https://github.com/AIforGoodSimulator/agentbased-model-Netlogo/blob/master/gismoria.zip](https://github.com/AIforGoodSimulator/agentbased-model-Netlogo/blob/master/gismoria.zip)) to reconstruct a physical representation of the camp and its various buildings.
 2. **Agent Module** - using demographic data from the Moria camp in conjunction with data from the United Nations ([UN, 2017](https://www.un.org/en/development/desa/population/publications/pdf/ageing/household_size_and_composition_around_the_world_2017_data_booklet.pdf)), the model creates refugees with various demographic information - age (youth, adult, elderly), sex, household composition (single individual, unaccompanied children, father only, mother only, father + mother, kids, elderly), nationality, and cultural dimensions by country from the Hofstede Insights website ([https://www.hofstede-insights.com/product/compare-countries/](https://www.hofstede-insights.com/product/compare-countries/)), which were then converted into cultural values following the ASSOCC model ([Dignum et al., 2020](https://doi.org/10.1007/s11023-020-09527-6)).
 3. **Network Module** - using the cultural values data, theoretical friendship networks were created where each refugee has up to 3 friends outside of their household who are close to their cultural value parameters, adapting the approach taken in the ASSOCC model ([Dignum et al., 2020](https://doi.org/10.1007/s11023-020-09527-6)).
-4. **Activity Module** - the model assumes an abstract daily activity for the refugees following one of two activity categories
+4. **Activity Module** - the model assumes an abstract daily activity for the refugees. These activities were based on desk research on newspaper articles that interviewed refugees in the Moria camp (Grant, 2020; UNHCR, 2020; Snowdon, 2018; Mercy Corps, 2018), and validated through discussions with key stakeholders at the NGO that manages the Moria camp, Kitrinos. The activities then simplified in order to make the model easier to analyze, with refugees following one of two activity categories: 
     - Activity category A - kids and elderly in households + unaccompanied youth
     06:00 - Wake up, go to the toilet to shower and get ready
     08:00 - meet with friends
@@ -1499,6 +1499,10 @@ In addition, following the approach in the ASSOCC model ([Dignum et al., 2020](h
 
 **NOTE** In order for the model to run, it is necessary to save the Moria camp GIS files in the same folder as the Netlogo file. You can download the GIS files from the Github here: https://github.com/AIforGoodSimulator/agentbased-model-Netlogo/blob/master/gismoria.zip
 
+When the model is run, the main output shows the number of refugees that are susceptible, exposed, pre-symptomatic, 1-asymptomatic, 2-asymptomatic, symptomatic, mild, severe, and recovered over time. This output can be analyzed under different scenarios to test how the various interventions change the level of exposure and the number of infected refugees. By comparing the outcomes from a base scenario where no interventions are turned on, with the outcomes from intervention scenarios where facemasks are mandated, a lockdown is enforced, isolation is implemented, or a combination of interventions is implemented, the model shows how effective these interventions are in reducing the number of infected refugees in the camp.
+
+In addition, the model also allows the simulation of intervention timing as well. Interventions can be turned on at the beginning of the simulation to test more proactive measures to mitigate the spread of the virus. Or they can be more reactionary and only be implemented when there is a symptomatic, mild, or severe case of the virus identified in the camp.
+
 When initializing the model, there are some parameters that are randomized, so no two initializations will be the same. The initialization process takes some time, so the model has the ability to EXPORT the world and IMPORT the world in order to reduce the initialization time and also test various changes in parameters with a single initialization.
 
 Infection parameters that can be changed include the transmission probabilities at home, at the toilet, in food lines, and when meeting with friends
@@ -1511,19 +1515,25 @@ Interventions that can be tested include the distribution of facemasks, the lock
 
 Model Github: https://github.com/AIforGoodSimulator/agentbased-model-Netlogo
 
-Dignum, F., Dignum, V., Davidsson, P. et al. Analysing the Combined Health, Social and Economic Impacts of the Corovanvirus Pandemic Using Agent-Based Social Simulation. Minds & Machines 30, 177–194 (2020). https://doi.org/10.1007/s11023-020-09527-6
+Dignum, F., Dignum, V., Davidsson, P. et al. Analysing the Combined Health, Social and Economic Impacts of the Corovanvirus Pandemic Using Agent-Based Social Simulation. Minds & Machines 30, 177–194 (2020). [https://doi.org/10.1007/s11023-020-09527-6](https://doi.org/10.1007/s11023-020-09527-6)
 
-Gilman RT, Mahroof-Sha S, Harkensee C, et al. Modelling interventions to control COVID-19
-outbreaks in a refugee camp. BMJ Glob Health. 2020;5:e003727.
+Gilman RT, Mahroof-Sha S, Harkensee C, et al. Modelling interventions to control COVID-19outbreaks in a refugee camp. BMJ Glob Health. 2020;5:e003727.
 
-Hofstede Insights. https://www.hofstede-insights.com/product/compare-countries/. Accessed 2020.
+Grant, H. 'Moria is a hell': new arrivals describe life in a Greek refugee camp. 17 January 2020. Available at: [https://www.theguardian.com/global-development/2020/jan/17/moria-is-a-hell-new-arrivals-describe-life-in-a-greek-refugee-camp](https://www.theguardian.com/global-development/2020/jan/17/moria-is-a-hell-new-arrivals-describe-life-in-a-greek-refugee-camp). Accessed June 2020.
+
+Hofstede Insights. Available at: [https://www.hofstede-insights.com/product/compare-countries/](https://www.hofstede-insights.com/product/compare-countries/). Accessed June 2020.
+
+Mercy Corps. Life as a refugee: Spend the day with Nour. 28 April 2018. Available at: [https://www.mercycorps.org/blog/day-life-refugee](https://www.mercycorps.org/blog/day-life-refugee). Accessed June 2020.
+
+Snowdon, G. A day in the life of a refugee child. 30 December 2018. Available at: [https://medium.com/world-food-programme-insight/a-day-in-the-life-of-a-refugee-child-42e142336c15](https://medium.com/world-food-programme-insight/a-day-in-the-life-of-a-refugee-child-42e142336c15). Accessed June 2020.
 
 Tuite AR, Fisman DN, Greer AL. Mathematical modelling of COVID-19 transmission and mitigation strategies in the population of Ontario, Canada. CMAJ. 2020; 192(19): E497-E505.
 
+UNHCR. Refugees speak of dreadful reality inside Lesvos’ Moria camp. 19 February 2020. Available at: [https://www.youtube.com/watch?v=z5Xv5e-35Io](https://www.youtube.com/watch?v=z5Xv5e-35Io). Accessed June 2020.
+
 Verity R, Okell LC, Dorigatti I, Winskill P, Whittaker C, Imai N, et al. Estimates of the severity of coronavirus disease 2019: a model-based analysis. Lancet Infect Dis. 2020; 60(6): P669-77.
 
-United Nations. Household Size and Composition
-Around the World 2017. https://www.un.org/en/development/desa/population/publications/pdf/ageing/household_size_and_composition_around_the_world_2017_data_booklet.pdf
+United Nations. Household Size and Composition Around the World 2017.  Available at: [https://www.un.org/en/development/desa/population/publications/pdf/ageing/household_size_and_composition_around_the_world_2017_data_booklet.pdf](https://www.un.org/en/development/desa/population/publications/pdf/ageing/household_size_and_composition_around_the_world_2017_data_booklet.pdf). Accessed June 2020.
 @#$#@#$#@
 default
 true
