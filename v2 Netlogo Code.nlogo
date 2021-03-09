@@ -837,8 +837,7 @@ to diseaseprogress ; follows disease progression described in Gilman et al. 2020
     [ set status "exposed"
       set infected? TRUE
       set duration 0
-      set exp-duration (random-normal 6.4 2.3) ; exposure duration described in Gilman et al. 2020 Model paper (https://www.medrxiv.org/content/10.1101/2020.07.07.20140996v2.full.pdf)
-      while [exp-duration < 0] [set exp-duration (random-normal 6.4 2.3)]
+      set exp-duration (random-weibull 3.039 7.163) ; exposure duration described in Gilman et al. 2020 Model paper (https://www.medrxiv.org/content/10.1101/2020.07.07.20140996v2.full.pdf)
     ]
   ]
 
@@ -1008,6 +1007,11 @@ to intervene
       ]
     ]
   ]
+end
+
+to-report random-weibull [k l]
+  let z random-float 1
+  report (l * ((ln (1 / (1 - z))) ^ (1 / k)))
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
