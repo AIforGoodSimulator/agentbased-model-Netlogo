@@ -1517,6 +1517,8 @@ Interventions that can be tested include the distribution of facemasks, the lock
 
 ## CREDITS AND REFERENCES
 
+Developed by Shyaam Ramkumar and Woi Sok Oh.
+
 Model Github: https://github.com/AIforGoodSimulator/agentbased-model-Netlogo
 
 Dignum, F., Dignum, V., Davidsson, P. et al. Analysing the Combined Health, Social and Economic Impacts of the Corovanvirus Pandemic Using Agent-Based Social Simulation. Minds & Machines 30, 177–194 (2020). [https://doi.org/10.1007/s11023-020-09527-6](https://doi.org/10.1007/s11023-020-09527-6)
