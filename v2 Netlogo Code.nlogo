@@ -1515,9 +1515,7 @@ Interventions that can be tested include the distribution of facemasks, the lock
 
 
 
-## CREDITS AND REFERENCES
-
-Developed by Shyaam Ramkumar and Woi Sok Oh.
+## REFERENCES
 
 Model Github: https://github.com/AIforGoodSimulator/agentbased-model-Netlogo
 
@@ -1540,6 +1538,10 @@ UNHCR. Refugees speak of dreadful reality inside Lesvos’ Moria camp. 19 Februa
 Verity R, Okell LC, Dorigatti I, Winskill P, Whittaker C, Imai N, et al. Estimates of the severity of coronavirus disease 2019: a model-based analysis. Lancet Infect Dis. 2020; 60(6): P669-77.
 
 United Nations. Household Size and Composition Around the World 2017.  Available at: [https://www.un.org/en/development/desa/population/publications/pdf/ageing/household_size_and_composition_around_the_world_2017_data_booklet.pdf](https://www.un.org/en/development/desa/population/publications/pdf/ageing/household_size_and_composition_around_the_world_2017_data_booklet.pdf). Accessed June 2020.
+
+## CREDITS
+Developed by Shyaam Ramkumar and Woi Sok Oh, 2020.
+<a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-nc-sa/4.0/80x15.png"/></a><br />This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/">Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License</a>.
 @#$#@#$#@
 default
 true
